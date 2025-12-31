@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visa Unified Click to Pay - Modern Checkout</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <!-- jose Library for JWE Encryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jose/4.14.4/index.umd.min.js"></script>
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+        color: #1e293b;
+      }
+      .font-mono {
+        font-family: "Space Mono", monospace;
+      }
+
+      /* Card Gradient */
+      .visa-card-bg {
+        background: linear-gradient(135deg, #1a1e21 0%, #102a43 100%);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+          0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+      .card-selected {
+        border: 2px solid #2563eb;
+        background-color: #eff6ff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.1);
+      }
+
+      /* Animations */
+      .fade-enter-active,
+      .fade-leave-active {
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .fade-enter-from,
+      .fade-leave-to {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      /* Custom Scrollbar */
+      .log-box::-webkit-scrollbar {
+        width: 6px;
+      }
+      .log-box::-webkit-scrollbar-track {
+        background: #1e293b;
+      }
+      .log-box::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 3px;
+      }
+
+      .input-field {
+        transition: all 0.2s;
+        border: 1px solid #e2e8f0;
+      }
+      .input-field:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="min-h-screen flex flex-col lg:flex-row">
+      <!-- Left Panel: Checkout Flow -->
+      <div
+        class="w-full lg:w-3/5 p-6 lg:p-12 flex flex-col justify-center max-w-3xl mx-auto"
+      >
+        <!-- Header -->
+        <div class="mb-10">
+          <div class="flex items-center gap-2 mb-2">
+            <span
+              class="bg-slate-800 text-white text-xs px-2 py-1 rounded font-bold tracking-wider"
+              >LIVE</span
+            >
+            <span class="text-gray-500 text-sm"
+              >Merchant Orchestrated Checkout</span
+            >
+          </div>
+          <h1 class="text-3xl font-bold text-slate-900">Secure Payment</h1>
+        </div>
+
+        <!-- Progress Stepper -->
+        <div
+          class="flex items-center mb-10 text-sm font-medium text-gray-400 relative"
+        >
+          <div
+            class="absolute top-1/2 left-0 w-full h-0.5 bg-gray-200 -z-10 transform -translate-y-1/2"
+          ></div>
+          <div
+            :class="['flex items-center justify-center w-8 h-8 rounded-full border-2 bg-white transition-colors', step >= 0 ? 'border-blue-600 text-blue-600' : 'border-gray-300']"
+          >
+            0
+          </div>
+          <div class="flex-1"></div>
+          <div
+            :class="['flex items-center justify-center w-8 h-8 rounded-full border-2 bg-white transition-colors', step >= 1 ? 'border-blue-600 text-blue-600' : 'border-gray-300']"
+          >
+            1
+          </div>
+          <div class="flex-1"></div>
+          <div
+            :class="['flex items-center justify-center w-8 h-8 rounded-full border-2 bg-white transition-colors', step >= 2 ? 'border-blue-600 text-blue-600' : 'border-gray-300']"
+          >
+            2
+          </div>
+          <div class="flex-1"></div>
+          <div
+            :class="['flex items-center justify-center w-8 h-8 rounded-full border-2 bg-white transition-colors', step >= 3 ? 'border-green-600 text-green-600' : 'border-gray-300']"
+          >
+            3
+          </div>
+        </div>
+
+        <!-- MAIN CONTENT AREA -->
+        <div
+          class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 min-h-[400px] relative overflow-hidden"
+        >
+          <!-- Loading Overlay -->
+          <div
+            v-if="loading"
+            class="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center z-50 fade-in"
+          >
+            <div
+              class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"
+            ></div>
+            <p class="text-slate-600 text-sm font-medium animate-pulse">
+              Processing...
+            </p>
+          </div>
+
+          <!-- STEP 0: Configuration -->
+          <transition name="fade" mode="out-in">
+            <div v-if="step === 0" key="step0">
+              <h2 class="text-xl font-bold mb-2 text-slate-800">
+                Configuration
+              </h2>
+              <p class="text-slate-500 text-sm mb-6">
+                Enter your Visa SRC credentials to initialize the environment.
+              </p>
+
+              <div class="space-y-4">
+                <div>
+                  <label
+                    class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1"
+                    >DPA ID</label
+                  >
+                  <input
+                    v-model="config.dpaId"
+                    class="input-field w-full p-3 rounded-lg bg-slate-50 text-slate-900 font-mono"
+                    placeholder="Enter your DPA ID"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1"
+                    >Visa Public Key (PEM)</label
+                  >
+                  <textarea
+                    v-model="config.publicKey"
+                    rows="5"
+                    class="input-field w-full p-3 rounded-lg bg-slate-50 text-slate-900 font-mono text-xs"
+                    placeholder="-----BEGIN PUBLIC KEY-----..."
+                  ></textarea>
+                  <p class="text-[10px] text-slate-400 mt-1">
+                    Required for client-side encryption (JWE).
+                  </p>
+                </div>
+                <button
+                  @click="saveConfig"
+                  :disabled="!config.dpaId"
+                  class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg shadow-slate-200 mt-4 disabled:opacity-50"
+                >
+                  Save & Continue
+                </button>
+              </div>
+            </div>
+
+            <!-- STEP 1: SDK Init -->
+            <div v-else-if="step === 1" key="step1">
+              <h2 class="text-xl font-bold mb-2 text-slate-800">
+                Initialize SDK
+              </h2>
+              <p class="text-slate-500 text-sm mb-6">
+                Load the Visa Secure Remote Commerce JS SDK.
+              </p>
+
+              <div
+                class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 flex items-start"
+              >
+                <div class="text-blue-600 mt-1 mr-3">
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    ></path>
+                  </svg>
+                </div>
+                <div>
+                  <div class="text-sm font-bold text-blue-900">
+                    Ready to Load
+                  </div>
+                  <div class="text-xs text-blue-700 mt-1 break-all font-mono">
+                    DPA ID: {{ config.dpaId }}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                @click="loadAndInitSdk"
+                class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200"
+              >
+                Load SDK
+              </button>
+            </div>
+
+            <!-- STEP 2: Identity & Cards -->
+            <div v-else-if="step === 2" key="step2">
+              <!-- 2A: Identity Check -->
+              <div v-if="viewState === 'email'">
+                <h2 class="text-xl font-bold mb-2 text-slate-800">
+                  Who are you?
+                </h2>
+                <p class="text-slate-500 text-sm mb-6">
+                  Enter your email to lookup stored cards.
+                </p>
+
+                <div class="relative">
+                  <input
+                    v-model="user.email"
+                    type="email"
+                    placeholder="email@example.com"
+                    class="input-field w-full p-4 pl-12 rounded-xl bg-slate-50 text-lg"
+                  />
+                  <div
+                    class="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"
+                  >
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                      ></path>
+                    </svg>
+                  </div>
+                </div>
+
+                <button
+                  @click="getCards"
+                  class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition mt-6"
+                >
+                  Check for Cards
+                </button>
+              </div>
+
+              <!-- 2B: OTP -->
+              <div v-else-if="viewState === 'otp'">
+                <h2 class="text-xl font-bold mb-2 text-slate-800">
+                  Verification
+                </h2>
+                <p class="text-slate-500 text-sm mb-6">
+                  Enter the code sent to
+                  <span class="font-bold text-slate-700">{{ user.email }}</span>
+                </p>
+
+                <input
+                  v-model="user.otp"
+                  type="text"
+                  placeholder="123456"
+                  class="input-field w-full p-4 text-center rounded-xl bg-slate-50 text-2xl tracking-[0.5em] font-mono mb-6"
+                />
+
+                <button
+                  @click="verifyOtp"
+                  class="w-full bg-yellow-500 text-white py-4 rounded-xl font-bold hover:bg-yellow-600 transition"
+                >
+                  Verify Identity
+                </button>
+              </div>
+
+              <!-- 2C: Card List -->
+              <div v-else-if="viewState === 'card-list'">
+                <div class="flex justify-between items-center mb-4">
+                  <h2 class="text-xl font-bold text-slate-800">Select Card</h2>
+                  <button
+                    @click="viewState = 'add-card'"
+                    class="text-sm text-blue-600 font-semibold hover:underline"
+                  >
+                    + New Card
+                  </button>
+                </div>
+
+                <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                  <div
+                    v-for="card in cards"
+                    :key="card.srcDigitalCardId"
+                    @click="selectCard(card)"
+                    :class="['p-4 rounded-xl border-2 cursor-pointer transition flex items-center gap-4', selectedCardId === card.srcDigitalCardId ? 'card-selected' : 'border-slate-100 hover:border-slate-300 bg-white']"
+                  >
+                    <!-- Card Icon -->
+                    <div
+                      class="w-12 h-8 bg-slate-200 rounded flex items-center justify-center text-xs font-bold text-slate-500"
+                    >
+                      {{ card.paymentCardType.substring(0,4) }}
+                    </div>
+
+                    <div class="flex-1">
+                      <div class="font-bold text-slate-800 text-sm">
+                        {{ card.digitalCardData.descriptorName }}
+                      </div>
+                      <div class="text-slate-500 text-xs font-mono mt-0.5">
+                        •••• {{ card.panLastFour }}
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="selectedCardId === card.srcDigitalCardId"
+                      class="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white"
+                    >
+                      <svg
+                        class="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="3"
+                          d="M5 13l4 4L19 7"
+                        ></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  @click="goToCheckout"
+                  :disabled="!selectedCardId"
+                  class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition mt-6 disabled:opacity-50 shadow-lg shadow-blue-200"
+                >
+                  Pay $100.00
+                </button>
+              </div>
+
+              <!-- 2D: Add Card (Visual Mode) -->
+              <div v-else-if="viewState === 'add-card'">
+                <div class="flex justify-between items-center mb-6">
+                  <h2 class="text-xl font-bold text-slate-800">Add New Card</h2>
+                  <button
+                    @click="cards.length > 0 ? viewState = 'card-list' : viewState = 'email'"
+                    class="text-slate-400 hover:text-slate-600"
+                  >
+                    <svg
+                      class="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      ></path>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Form -->
+                <div class="space-y-4">
+                  <!-- Quick Fill -->
+                  <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+                    <button
+                      @click="fillTestCard('visa')"
+                      class="text-xs bg-slate-100 px-3 py-1.5 rounded-full hover:bg-slate-200 text-slate-600 whitespace-nowrap"
+                    >
+                      Visa Test
+                    </button>
+                    <button
+                      @click="fillTestCard('mc')"
+                      class="text-xs bg-slate-100 px-3 py-1.5 rounded-full hover:bg-slate-200 text-slate-600 whitespace-nowrap"
+                    >
+                      MC Test
+                    </button>
+                  </div>
+
+                  <div>
+                    <label
+                      class="block text-xs font-bold text-slate-500 uppercase mb-1"
+                      >Card Number</label
+                    >
+                    <input
+                      v-model="newCard.pan"
+                      maxlength="19"
+                      placeholder="0000 0000 0000 0000"
+                      class="input-field w-full p-3 rounded-lg font-mono bg-slate-50"
+                    />
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        class="block text-xs font-bold text-slate-500 uppercase mb-1"
+                        >Expiry</label
+                      >
+                      <div class="flex gap-2">
+                        <input
+                          v-model="newCard.expMonth"
+                          placeholder="MM"
+                          maxlength="2"
+                          class="input-field w-full p-3 rounded-lg text-center font-mono bg-slate-50"
+                        />
+                        <input
+                          v-model="newCard.expYear"
+                          placeholder="YY"
+                          maxlength="2"
+                          class="input-field w-full p-3 rounded-lg text-center font-mono bg-slate-50"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label
+                        class="block text-xs font-bold text-slate-500 uppercase mb-1"
+                        >CVV</label
+                      >
+                      <input
+                        v-model="newCard.cvv"
+                        placeholder="123"
+                        maxlength="4"
+                        class="input-field w-full p-3 rounded-lg text-center font-mono bg-slate-50"
+                      />
+                    </div>
+                  </div>
+
+                  <label
+                    class="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition"
+                  >
+                    <input
+                      type="checkbox"
+                      v-model="newCard.saveProfile"
+                      class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span class="text-sm font-medium text-slate-700"
+                      >Remember this card for future use</span
+                    >
+                  </label>
+
+                  <div
+                    v-if="!config.publicKey"
+                    class="text-xs text-red-500 mt-2"
+                  >
+                    * Missing Public Key. Encryption will fail. Please configure
+                    in step 0.
+                  </div>
+                </div>
+
+                <button
+                  @click="goToCheckoutNewCard"
+                  :disabled="!newCard.pan || !config.publicKey"
+                  class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition mt-6 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Encrypt & Pay
+                </button>
+              </div>
+            </div>
+
+            <!-- STEP 3: Success -->
+            <div v-else-if="step === 3" key="step3" class="text-center py-10">
+              <div
+                class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+              >
+                <svg
+                  class="w-10 h-10 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M5 13l4 4L19 7"
+                  ></path>
+                </svg>
+              </div>
+              <h2 class="text-2xl font-bold text-slate-800 mb-2">
+                Payment Authorized!
+              </h2>
+              <p class="text-slate-500 text-sm mb-8">
+                Your secure payload has been generated and sent to the backend.
+              </p>
+
+              <button
+                @click="resetFlow"
+                class="text-blue-600 font-semibold hover:underline"
+              >
+                Start New Transaction
+              </button>
+            </div>
+          </transition>
+        </div>
+
+        <div class="mt-8 text-center">
+          <button
+            @click="unbindDevice"
+            class="text-xs text-slate-400 hover:text-red-500 transition"
+          >
+            Reset Device Binding
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Panel: Order & Visuals (Desktop Only) -->
+      <div
+        class="hidden lg:flex w-2/5 bg-slate-900 p-12 flex-col text-white relative overflow-hidden"
+      >
+        <!-- Background Decor -->
+        <div
+          class="absolute top-0 right-0 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2"
+        ></div>
+        <div
+          class="absolute bottom-0 left-0 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2"
+        ></div>
+
+        <h3
+          class="text-slate-400 font-bold uppercase tracking-widest text-xs mb-8 z-10"
+        >
+          Order Summary
+        </h3>
+
+        <!-- Live Card Preview -->
+        <div
+          class="z-10 mb-12 transform hover:scale-105 transition duration-500"
+        >
+          <div
+            class="visa-card-bg w-full aspect-[1.586] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden border border-white/10"
+          >
+            <!-- Chip -->
+            <div
+              class="w-12 h-9 bg-yellow-400/20 rounded-md border border-yellow-400/40 relative overflow-hidden"
+            >
+              <div
+                class="absolute top-1/2 left-0 w-full h-[1px] bg-yellow-400/40"
+              ></div>
+              <div
+                class="absolute left-1/2 top-0 w-[1px] h-full bg-yellow-400/40"
+              ></div>
+            </div>
+
+            <!-- Number -->
+            <div
+              class="font-mono text-2xl tracking-widest text-white/90 text-shadow"
+            >
+              {{ formattedPan || '•••• •••• •••• ••••' }}
+            </div>
+
+            <!-- Info -->
+            <div class="flex justify-between items-end">
+              <div>
+                <div class="text-[10px] uppercase text-white/50 mb-1">
+                  Card Holder
+                </div>
+                <div class="font-medium tracking-wide">VISA MEMBER</div>
+              </div>
+              <div>
+                <div
+                  class="text-[10px] uppercase text-white/50 mb-1 text-right"
+                >
+                  Expires
+                </div>
+                <div class="font-mono">
+                  {{ newCard.expMonth || 'MM' }}/{{ newCard.expYear || 'YY' }}
+                </div>
+              </div>
+              <!-- Brand Logo -->
+              <div class="ml-4">
+                <span class="font-bold italic text-2xl">Visa</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receipt -->
+        <div class="z-10 space-y-4 border-t border-white/10 pt-8">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-300">Premium Plan (Yearly)</span>
+            <span class="font-bold">$90.00</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-300">Tax</span>
+            <span class="font-bold">$10.00</span>
+          </div>
+          <div
+            class="flex justify-between items-center text-xl pt-4 border-t border-white/10"
+          >
+            <span class="font-bold">Total</span>
+            <span class="font-bold">$100.00</span>
+          </div>
+        </div>
+
+        <!-- Console Log (Mini) -->
+        <div class="z-10 pt-12">
+          <div
+            class="bg-white/95 rounded-lg p-4 font-mono text-[10px] h-[250px] overflow-y-auto log-box border border-white/5"
+          >
+            <div v-if="logs.length === 0" class="text-black italic">
+              Waiting for events...
+            </div>
+            <div v-for="(log, i) in logs" :key="i" class="mb-1">
+              <span
+                :class="log.type === 'error' ? 'text-red-400' : 'text-black'"
+                >> {{ log.message }} {{JSON.stringify(log.data)}}</span
+              >
+              <p class="text-black"> --------------------------------------------------- </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp, ref, reactive, computed, nextTick, onMounted } = Vue;
+
+      createApp({
+        setup() {
+          // State
+          const step = ref(0);
+          const viewState = ref("email"); // email, otp, card-list, add-card
+          const loading = ref(false);
+          const isSdkLoaded = ref(false);
+          const config = reactive({
+            dpaId: "JRG47J3KFNIQ7ASQN5DB21NO7TV3uh8_vx1lvzm7Kh8jQahhw",
+            publicKey: `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu+s/2/s/2/s/2/s/2/s/
+2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/
+2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/
+2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/
+2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/
+2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/2/s/
+AwIDAQAB
+-----END PUBLIC KEY-----`,
+            cardBrands: "visa,mastercard",
+          });
+          const user = reactive({ email: "waylonhsu@cherricorp.com", otp: "" });
+          const cards = ref([]);
+          const selectedCardId = ref(null);
+          const newCard = reactive({
+            pan: "",
+            expMonth: "",
+            expYear: "",
+            cvv: "",
+            saveProfile: false,
+          });
+          const checkoutPayload = ref(null);
+          const logs = ref([]);
+
+          // Formatted PAN for visual card
+          const formattedPan = computed(() => {
+            if (!newCard.pan) return "";
+            return newCard.pan
+              .replace(/\s/g, "")
+              .replace(/(.{4})/g, "$1 ")
+              .trim();
+          });
+
+          // Logging Helper
+          const logBox = ref();
+          const addLog = (message, data = null, type = "info") => {
+            logs.value.push({ message, data, type });
+            nextTick(() => {
+              logBox.value.scrollTop = logBox.value.scrollHeight;
+            });
+          };
+
+          // 0. Configuration
+          const saveConfig = () => {
+            if (config.dpaId) {
+              addLog(`Configuration Saved. DPA ID: ${config.dpaId}`);
+              step.value = 1;
+            }
+          };
+
+          // 1. SDK Loading
+          const loadAndInitSdk = () => {
+            if (!config.dpaId) return;
+            loading.value = true;
+
+            // Clear any previous SDK references/scripts to avoid duplicates if re-running
+            const existingScript = document.getElementById("visa-sdk-script");
+            if (existingScript) existingScript.remove();
+
+            const script = document.createElement("script");
+            script.id = "visa-sdk-script";
+            script.src = `https://sandbox.secure.checkout.visa.com/checkout-widget/resources/js/integration/v2/sdk.js?dpaId=${config.dpaId}&cardBrands=${config.cardBrands}`;
+
+            script.onload = () => {
+              initVsdk();
+            };
+            script.onerror = () => {
+              addLog(
+                "Error: Failed to load SDK. Check your DPA ID or allowed domains.",
+                null,
+                "error"
+              );
+              loading.value = false;
+              // No fallback to mock. User must fix configuration.
+            };
+            document.head.appendChild(script);
+          };
+
+          const initVsdk = async () => {
+            if (window.VSDK) {
+              try {
+                await window.VSDK.initialize({
+                  dpaTransactionOptions: { dpaLocale: "en_US" },
+                });
+                isSdkLoaded.value = true;
+                step.value = 2;
+                loading.value = false;
+                addLog("SDK Initialized");
+              } catch (e) {
+                console.error(e);
+                addLog(`SDK Init Error: ${e.message}`, null, "error");
+                loading.value = false;
+              }
+            }
+          };
+
+          // 2. Get Cards
+          const getCards = async () => {
+            loading.value = true;
+            try {
+              addLog(`Looking up: ${user.email}`);
+              const res = await window.VSDK.getCards({
+                consumerIdentity: {
+                  identityValue: user.email,
+                  identityType: "EMAIL_ADDRESS",
+                },
+              });
+              handleResponse(res);
+            } catch (e) {
+              addLog("Get Cards Failed", e.message, "error");
+              loading.value = false;
+            }
+          };
+
+          const verifyOtp = async () => {
+            loading.value = true;
+            try {
+              const res = await window.VSDK.getCards({
+                consumerIdentity: {
+                  identityValue: user.email,
+                  identityType: "EMAIL_ADDRESS",
+                },
+                validationData: user.otp,
+              });
+              handleResponse(res);
+            } catch (e) {
+              addLog("OTP Verification Failed", e.message, "error");
+              loading.value = false;
+            }
+          };
+
+          const handleResponse = (res) => {
+            loading.value = false;
+            addLog(`Action Code: ${res.actionCode}`);
+            if (res.actionCode === "SUCCESS") {
+              if (res.profiles?.length && res.profiles[0].maskedCards?.length) {
+                cards.value = res.profiles.flatMap((p) => p.maskedCards);
+                viewState.value = "card-list";
+              } else {
+                viewState.value = "add-card";
+              }
+            } else if (res.actionCode === "PENDING_CONSUMER_IDV") {
+              viewState.value = "otp";
+            } else if (res.actionCode === "ADD_CARD") {
+              viewState.value = "add-card";
+            }
+          };
+
+          // 3. Select & Checkout
+          const selectCard = (card) => {
+            selectedCardId.value = card.srcDigitalCardId;
+          };
+
+          const goToCheckout = async () => {
+            loading.value = true;
+            try {
+              const res = await window.VSDK.checkout({
+                srcDigitalCardId: selectedCardId.value,
+                dpaTransactionOptions: {
+                  transactionAmount: {
+                    transactionAmount: "100",
+                    transactionCurrencyCode: "USD",
+                  },
+                },
+              });
+              if (res.actionCode === "SUCCESS") {
+                checkoutPayload.value = res.checkoutResponse;
+                step.value = 3;
+                addLog("Checkout Success!");
+              } else {
+                addLog("Checkout Failed", res.actionCode, "error");
+              }
+              loading.value = false;
+            } catch (e) {
+              addLog("Checkout Exception", e.message, "error");
+              loading.value = false;
+            }
+          };
+
+          // 4. JWE Encryption Helper (Using jose)
+          const encryptCardData = async (pan, expMonth, expYear, cvv, key) => {
+            if (!window.jose) {
+              addLog(
+                "Encryption Error: jose library not loaded.",
+                null,
+                "error"
+              );
+              return null;
+            }
+            const jose = window.jose;
+
+            // Visa-compliant payload structure
+            const cardData = {
+              primaryAccountNumber: pan,
+              panExpirationMonth: expMonth,
+              panExpirationYear: expYear,
+              cardSecurityCode: cvv,
+            };
+
+            try {
+              addLog("Encrypting card data...");
+              const publicKey = await jose.importSPKI(key, "RSA-OAEP-256");
+              const jwe = await new jose.CompactEncrypt(
+                new TextEncoder().encode(JSON.stringify(cardData))
+              )
+                .setProtectedHeader({ alg: "RSA-OAEP-256", enc: "A256GCM" })
+                .encrypt(publicKey);
+
+              return jwe;
+            } catch (e) {
+              console.error(e);
+              addLog(
+                "Encryption Failed: Invalid Key or Data",
+                e.message,
+                "error"
+              );
+              throw e;
+            }
+          };
+
+          const goToCheckoutNewCard = async () => {
+            if (!config.publicKey) {
+              addLog("Error: Missing Public Key", null, "error");
+              return;
+            }
+
+            loading.value = true;
+
+            try {
+              // 1. Encrypt Data
+              const encryptedJwe = await encryptCardData(
+                newCard.pan,
+                newCard.expMonth,
+                newCard.expYear,
+                newCard.cvv,
+                config.publicKey
+              );
+
+              if (!encryptedJwe) {
+                loading.value = false;
+                return;
+              }
+
+              const complianceSettings = newCard.saveProfile
+                ? {
+                    complianceResources: [
+                      {
+                        complianceType: "PRIVACY_POLICY",
+                        uri: "https://secure.checkout.visa.com/privacy",
+                      },
+                      {
+                        complianceType: "TERMS_AND_CONDITIONS",
+                        uri: "https://secure.checkout.visa.com/terms",
+                      },
+                      {
+                        complianceType: "REMEMBER_ME",
+                        uri: "https://secure.checkout.visa.com/remember-me",
+                      },
+                    ],
+                  }
+                : undefined;
+
+              // 2. Call Checkout
+              addLog("Sending Encrypted Checkout...");
+
+              const checkoutRequest = {
+                encryptedCard: encryptedJwe,
+                complianceSettings,
+                consumer: {
+                  consumerIdentity: {
+                    identityValue: user.email,
+                    identityType: "EMAIL_ADDRESS",
+                  },
+                },
+                dpaTransactionOptions: {
+                  transactionAmount: {
+                    transactionAmount: "100",
+                    transactionCurrencyCode: "USD",
+                  },
+                },
+              };
+              addLog("Checkout Request", checkoutRequest);
+
+              let res = await window.VSDK.checkout();
+
+              addLog("Checkout Response", res);
+
+              if (res.actionCode === "SUCCESS") {
+                checkoutPayload.value = res.checkoutResponse;
+                step.value = 3;
+                addLog("Checkout Success!");
+              } else {
+                addLog("Checkout Failed", res.actionCode, "error");
+              }
+            } catch (e) {
+              addLog("Checkout Exception", e.message, "error");
+            } finally {
+              loading.value = false;
+            }
+          };
+
+          const fillTestCard = (type) => {
+            if (type === "visa") {
+              newCard.pan = "4111111111111111";
+              newCard.expMonth = "12";
+              newCard.expYear = "30";
+              newCard.cvv = "123";
+            } else {
+              newCard.pan = "5123456789012346";
+              newCard.expMonth = "12";
+              newCard.expYear = "30";
+              newCard.cvv = "123";
+            }
+          };
+
+          const unbindDevice = async () => {
+            if (window.VSDK) await window.VSDK.unbindAppInstance();
+            window.location.reload();
+          };
+
+          const resetFlow = () => {
+            step.value = 2;
+            viewState.value = "email";
+            selectedCardId.value = null;
+            cards.value = [];
+          };
+
+          onMounted(() => {
+            logBox.value = document.querySelector(".log-box");
+          });
+
+          return {
+            step,
+            viewState,
+            loading,
+            config,
+            user,
+            cards,
+            selectedCardId,
+            newCard,
+            logs,
+            formattedPan,
+            saveConfig,
+            loadAndInitSdk,
+            getCards,
+            verifyOtp,
+            selectCard,
+            goToCheckout,
+            goToCheckoutNewCard,
+            fillTestCard,
+            unbindDevice,
+            resetFlow,
+          };
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
