@@ -939,7 +939,7 @@ AwIDAQAB
               };
               addLog("Checkout Request", checkoutRequest);
 
-              let res = await window.VSDK.checkout();
+              let res = await window.VSDK.checkout(checkoutRequest);
 
               addLog("Checkout Response", res);
 
