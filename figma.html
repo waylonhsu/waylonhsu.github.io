@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Visa Link Pay - Click to Pay</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- jose Library for JWE Encryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jose/4.14.4/index.umd.min.js"></script>
+    <style>
+        /* =========================================
+           RESET & BASE
+           ========================================= */
+        :root {
+            --visa-blue: #1A1F71;
+            --action-blue: #0055dd;
+            --action-blue-hover: #0044bb;
+            --bg-color: #F4F5F7;
+            --text-primary: #242424;
+            --text-secondary: #5E6C75;
+            --border-color: #E1E4E8;
+            --input-bg: #FFFFFF;
+            --radius-lg: 16px;
+            --radius-md: 8px;
+            --radius-sm: 4px;
+            --shadow-card: 0 4px 24px rgba(0,0,0,0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: var(--bg-color); 
+            color: var(--text-primary); 
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        #app { 
+            width: 100%;
+            max-width: 420px;
+            background: #fff;
+            display: flex; 
+            flex-direction: column; 
+            position: relative; 
+            box-shadow: var(--shadow-card);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            height: auto;
+            min-height: 500px;
+        }
+
+        /* =========================================
+           NAVBAR / HEADER
+           ========================================= */
+        .nav-bar { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 16px 20px; 
+            background: #fff;
+            border-bottom: 1px solid transparent; /* Cleaner look */
+        }
+
+        .nav-btn { 
+            background: none; 
+            border: none; 
+            font-size: 14px; 
+            color: var(--action-blue); 
+            font-weight: 500;
+            cursor: pointer; 
+            padding: 4px;
+        }
+
+        .visa-logo-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        /* CSS-only Visa Logo for crispness */
+        .visa-text {
+            font-family: "Myriad Pro", sans-serif; 
+            font-weight: 900;
+            font-style: italic;
+            font-size: 20px;
+            color: var(--visa-blue);
+            letter-spacing: 0.5px;
+            line-height: 1;
+        }
+        
+        .visa-badge-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+        
+        /* =========================================
+           ACCOUNT BAR
+           ========================================= */
+        .account-info { 
+            background: #F8F9FA; 
+            padding: 12px 24px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px; 
+            color: var(--text-primary); 
+        }
+        .account-details { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+        .account-switch { 
+            color: var(--action-blue); 
+            text-decoration: none; 
+            font-weight: 600; 
+            font-size: 13px; 
+        }
+
+        /* =========================================
+           CONTENT AREA
+           ========================================= */
+        .content { 
+            padding: 32px 28px; 
+            flex: 1; 
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .step-content {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        h2.step-title { 
+            font-size: 22px; 
+            font-weight: 700; 
+            margin-bottom: 8px; 
+            color: var(--visa-blue); 
+            text-align: center; 
+            letter-spacing: -0.3px;
+        }
+
+        p.step-subtitle { 
+            text-align: center; 
+            color: var(--text-secondary); 
+            font-size: 15px; 
+            line-height: 1.4; 
+            margin-bottom: 32px; 
+        }
+
+        /* =========================================
+           FORMS & INPUTS
+           ========================================= */
+        .form-group { margin-bottom: 20px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+        label { 
+            display: block; 
+            font-size: 12px; 
+            font-weight: 600; 
+            color: var(--text-secondary); 
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"], 
+        input[type="email"], 
+        textarea { 
+            width: 100%; 
+            padding: 14px 16px; 
+            border: 1px solid var(--border-color); 
+            border-radius: var(--radius-md); 
+            font-size: 16px; 
+            background: var(--input-bg);
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+            -webkit-appearance: none;
+        }
+
+        input:focus, textarea:focus { 
+            border-color: var(--action-blue); 
+            box-shadow: 0 0 0 3px rgba(0,85,221, 0.1);
+            outline: none; 
+        }
+
+        input::placeholder { color: #A0A0A0; }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .checkbox-group input { width: auto; }
+        .checkbox-group label { margin: 0; text-transform: none; color: var(--text-primary); }
+
+        /* =========================================
+           OTP INPUTS
+           ========================================= */
+        .otp-group { 
+            display: flex; 
+            gap: 10px; 
+            justify-content: center; 
+            margin: 24px 0; 
+        }
+        .otp-input { 
+            width: 48px !important; 
+            height: 56px; 
+            font-size: 24px !important; 
+            text-align: center; 
+            padding: 0 !important; 
+            border-radius: 8px !important; 
+            border: 1px solid var(--border-color) !important;
+            font-weight: 600;
+        }
+        .otp-input:focus {
+            border-color: var(--action-blue) !important;
+            transform: translateY(-1px);
+        }
+
+        /* =========================================
+           CARD LIST
+           ========================================= */
+        .card-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+        
+        .card-row { 
+            display: flex; 
+            align-items: center; 
+            padding: 16px; 
+            border: 1px solid var(--border-color); 
+            border-radius: var(--radius-md); 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            background: #fff; 
+        }
+        
+        .card-row:hover { border-color: #B0C4DE; background: #F8FBFF; }
+        
+        .card-row.selected { 
+            border: 2px solid var(--action-blue); 
+            background-color: #F4F8FF; 
+            padding: 15px; /* Adjust for border width */
+        }
+        
+        /* Custom Radio */
+        .card-radio { 
+            margin-right: 16px; 
+            width: 20px; 
+            height: 20px; 
+            border: 2px solid #C4C4C4; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            flex-shrink: 0; 
+            background: #fff; 
+            transition: all 0.2s;
+        }
+        
+        .card-row.selected .card-radio { 
+            border-color: var(--action-blue); 
+            background: var(--action-blue);
+        }
+        
+        .card-row.selected .card-radio::after { 
+            content: ''; 
+            width: 8px; 
+            height: 8px; 
+            background: #fff; 
+            border-radius: 50%; 
+            display: block; 
+        }
+        
+        .card-icon-box {
+            width: 42px;
+            height: 28px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: bold;
+            font-style: italic;
+            color: var(--visa-blue);
+            font-size: 10px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .card-details { flex: 1; display: flex; flex-direction: column; }
+        .card-number { font-size: 15px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.5px; }
+        .card-expiry { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        /* =========================================
+           BUTTONS
+           ========================================= */
+        .btn-group { margin-top: auto; display: flex; flex-direction: column-reverse; gap: 12px; padding-top: 20px; }
+        
+        .btn { 
+            display: block; 
+            width: 100%; 
+            padding: 16px; 
+            border-radius: 28px; /* Pill shape */
+            border: none; 
+            font-size: 16px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            text-align: center; 
+            transition: all 0.2s; 
+            min-height: 52px; 
+        }
+        
+        .btn-primary { 
+            background: var(--action-blue); 
+            color: white; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 10px; 
+            box-shadow: 0 2px 6px rgba(0,85,221,0.25);
+        }
+        .btn-primary:hover { background: var(--action-blue-hover); transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { background: #E0E0E0; color: #A0A0A0; cursor: not-allowed; box-shadow: none; transform: none; }
+        
+        .btn-secondary { 
+            background: transparent; 
+            color: var(--action-blue); 
+            border: 1px solid transparent; 
+            font-weight: 600;
+        }
+        .btn-secondary:hover { background: #F0F5FF; }
+
+        .secure-lock { font-size: 14px; margin-right: 4px; }
+
+        .separator { 
+            display: flex; 
+            align-items: center; 
+            text-align: center; 
+            color: var(--text-secondary); 
+            font-size: 13px; 
+            margin: 20px 0; 
+        }
+        .separator::before, .separator::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .separator span { padding: 0 10px; }
+
+        /* =========================================
+           PROGRESS INDICATORS
+           ========================================= */
+        .progress-bar { display: flex; gap: 6px; margin-bottom: 32px; justify-content: center; }
+        .progress-step { 
+            width: 6px; 
+            height: 6px; 
+            background: #E0E0E0; 
+            border-radius: 50%; 
+            transition: all 0.3s; 
+        }
+        .progress-step.active { 
+            background: var(--action-blue); 
+            width: 20px; 
+            border-radius: 3px; 
+        }
+        .progress-step.completed { background: var(--action-blue); opacity: 0.5; }
+
+        /* =========================================
+           LOADER & SUCCESS
+           ========================================= */
+        .loading-overlay { 
+            position: absolute; 
+            top: 0; left: 0; right: 0; bottom: 0; 
+            background: rgba(255,255,255,0.95); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 100; 
+            flex-direction: column; 
+            border-radius: var(--radius-lg);
+        }
+        .spinner { 
+            border: 3px solid #f3f3f3; 
+            border-top: 3px solid var(--action-blue); 
+            border-radius: 50%; 
+            width: 48px; 
+            height: 48px; 
+            animation: spin 0.8s linear infinite; 
+            margin-bottom: 20px; 
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .success-message { text-align: center; padding: 20px 0; animation: fadeIn 0.5s ease; }
+        .success-icon { 
+            width: 80px; 
+            height: 80px; 
+            background: #28a745; 
+            border-radius: 50%; 
+            color: white; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 40px; 
+            margin: 0 auto 24px; 
+            box-shadow: 0 8px 24px rgba(40,167,69,0.3); 
+        }
+
+        /* =========================================
+           RESPONSIVE
+           ========================================= */
+        @media (max-width: 480px) {
+            body { 
+                background: #fff;
+                padding: 0;
+                align-items: flex-start;
+            }
+            #app {
+                max-width: 100%;
+                min-height: 100vh;
+                box-shadow: none;
+                border-radius: 0;
+            }
+            .content { padding: 24px 20px; }
+            .nav-bar { padding: 12px 16px; }
+            h2.step-title { font-size: 20px; }
+            .btn { padding: 14px; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Layout Structure -->
+        
+        <!-- Nav Bar -->
+        <div class="nav-bar">
+            <button class="nav-btn" @click="handleReset" v-if="currentStep !== 'success'">Cancel</button>
+            <div class="visa-logo-wrapper">
+                <span class="visa-text">VISA</span>
+                <span class="visa-badge-text">Click to Pay</span>
+            </div>
+            <button class="nav-btn" style="color: var(--text-secondary); font-size: 13px;">
+                 EN <span style="font-size: 10px; margin-left: 2px;">▼</span>
+            </button>
+        </div>
+
+        <!-- Account Info (Visible in selectCard or addCard) -->
+        <template v-if="['selectCard', 'addCard'].includes(currentStep)">
+             <div class="account-info">
+                 <div class="account-details">
+                     <span>📱 (***) *** - 1234</span>
+                 </div>
+                 <a href="#" class="account-switch" @click.prevent="handleReset">Switch</a>
+             </div>
+        </template>
+        
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Loading Overlay -->
+                <template v-if="isLoading">
+                    <div class="loading-overlay">
+                        <div class="spinner"></div>
+                        <div class="loading-text" style="font-weight: 600; margin-bottom: 4px;">{{ loadingText }}</div>
+                        <div class="loading-subtext" style="color: #666; font-size: 13px;">{{ loadingSubtext }}</div>
+                    </div>
+                </template>
+
+                <!-- Config Step -->
+                <template v-if="currentStep === 'config'">
+                    <config-step 
+                        :config="config"
+                        @save-config="saveConfig"
+                        @init-sdk="loadAndInitSdk"
+                    ></config-step>
+                </template>
+
+                <!-- Find Card Step -->
+                <template v-else-if="currentStep === 'findCard'">
+                    <find-card-step 
+                        :form="form"
+                        :progress="progress"
+                        @prev="handleReset"
+                        @get-cards="getCards"
+                    ></find-card-step>
+                </template>
+
+                <!-- Select Card Step -->
+                <template v-else-if="currentStep === 'selectCard'">
+                    <select-card-step 
+                        :cards="cards"
+                        :progress="progress"
+                        @prev="handleReset"
+                        @checkout="checkout"
+                        @add-card="currentStep = 'addCard'"
+                    ></select-card-step>
+                </template>
+
+                <!-- Add Card Step -->
+                <template v-else-if="currentStep === 'addCard'">
+                    <add-card-step 
+                        :progress="progress"
+                        @prev="currentStep = 'selectCard'"
+                        @checkout-card="checkoutCard"
+                    ></add-card-step>
+                </template>
+
+                <!-- OTP Step -->
+                <template v-else-if="currentStep === 'otp'">
+                    <otp-step 
+                        :progress="progress"
+                        @prev="handleReset"
+                        @verify-otp="verifyOtp"
+                    ></otp-step>
+                </template>
+
+                <!-- Success Step -->
+                <template v-else-if="currentStep === 'success'">
+                    <success-step 
+                        :transaction-id="transactionId"
+                        @reset="handleReset"
+                    ></success-step>
+                </template>
+            </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        // ========== Configuration Step Component ==========
+        const ConfigStep = {
+            template: `
+                <div class="step-content">
+                    <h2 class="step-title">Setup Configuration</h2>
+                    <p class="step-subtitle">Initialize the Visa SDK Environment</p>
+
+                    <div class="section">
+                        <div class="form-group">
+                            <label>DPA ID</label>
+                            <input 
+                                type="text" 
+                                v-model="config.dpaId"
+                                placeholder="Enter DPA ID"
+                                @keyup.enter="$emit('init-sdk')"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label>Visa Public Key (PEM)</label>
+                            <textarea 
+                                v-model="config.publicKey"
+                                placeholder="-----BEGIN PUBLIC KEY-----"
+                                style="height: 120px; font-family: monospace; font-size: 11px; white-space: pre;"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" @click="fillTestData">Use Test Data</button>
+                        <button class="btn btn-primary" @click="saveAndInit" :disabled="!config.dpaId">Initialize SDK</button>
+                    </div>
+                </div>
+            `,
+            props: ['config'],
+            emits: ['save-config', 'init-sdk'],
+            methods: {
+                fillTestData() {
+                    this.config.dpaId = 'TEST_DPA_ID_12345';
+                    this.config.publicKey = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----';
+                },
+                saveAndInit() {
+                    this.$emit('save-config');
+                    setTimeout(() => this.$emit('init-sdk'), 500);
+                }
+            }
+        };
+
+        // ========== Step 1: Find Card Component ==========
+        const FindCardStep = {
+            template: `
+                <div class="step-content">
+                    <div style="margin-bottom: 24px;">
+                        <div class="progress-bar">
+                            <div class="progress-step active"></div>
+                            <div class="progress-step"></div>
+                            <div class="progress-step"></div>
+                        </div>
+                    </div>
+
+                    <h2 class="step-title">Welcome Back</h2>
+                    <p class="step-subtitle">Enter your email to look up your cards</p>
+
+                    <div class="section">
+                        <div class="form-group">
+                            <label>Email Address</label>
+                            <input 
+                                type="email" 
+                                v-model="email"
+                                placeholder="name@example.com"
+                                @keyup.enter="$emit('get-cards', email)"
+                                autofocus
+                            >
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" @click="$emit('get-cards', email)" :disabled="!email">Continue</button>
+                    </div>
+                </div>
+            `,
+            props: ['progress', 'form'],
+            emits: ['next', 'prev', 'get-cards'],
+            data() {
+                return { email: '' };
+            }
+        };
+
+        // ========== Step 2: Select Card Component ==========
+        const SelectCardStep = {
+            template: `
+                <div class="step-content">
+                    <h2 class="step-title" style="text-align: left; font-size: 18px;">Select Payment Card</h2>
+                    
+                    <div class="card-list" v-if="cards.length > 0" style="margin-top: 20px;">
+                        <div 
+                            v-for="(card, index) in cards" 
+                            :key="index"
+                            class="card-row"
+                            :class="{ selected: selectedCardId === card.srcDigitalCardId }"
+                            @click="selectCard(card)"
+                        >
+                            <div class="card-radio"></div>
+                            <div class="card-icon-box">
+                                {{ card.cardBrand }}
+                            </div>
+                            <div class="card-details">
+                                <div class="card-number">•••• {{ card.last4PAN }}</div>
+                                <div class="card-expiry">Exp. {{ card.panExpirationMonth }}/{{ card.panExpirationYear }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div v-else style="text-align: center; padding: 20px; color: #5f6368;">
+                        No cards found.
+                    </div>
+
+                    <div class="separator"><span>Or pay with</span></div>
+                    
+                    <button class="btn btn-secondary" style="border: 1px solid #E1E4E8; color: #242424;" @click="$emit('add-card')">
+                        <span style="font-size: 18px; margin-right: 8px;">+</span> Add another card
+                    </button>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" v-if="cards.length" @click="$emit('checkout')" :disabled="!selectedCardId">
+                            <span class="secure-lock">🔒</span> Pay $100.00
+                        </button>
+                    </div>
+                </div>
+            `,
+            props: ['progress', 'cards'],
+            emits: ['next', 'prev', 'checkout', 'add-card'],
+            data() {
+                return { selectedCardId: null };
+            },
+            mounted() {
+                if (this.cards.length > 0) {
+                     this.selectedCardId = this.cards[0].srcDigitalCardId;
+                }
+            },
+            methods: {
+                selectCard(card) {
+                    this.selectedCardId = card.srcDigitalCardId;
+                }
+            }
+        };
+
+        // ========== Step 3: Add Card Component ==========
+        const AddCardStep = {
+            template: `
+                <div class="step-content">
+                    <h2 class="step-title">Add New Card</h2>
+                    <p class="step-subtitle">Enter your card details securely</p>
+
+                    <div class="section">
+                        <div class="form-group">
+                            <label>Name on Card</label>
+                            <input type="text" v-model="cardData.cardName" placeholder="JOHN DOE">
+                        </div>
+                        <div class="form-group">
+                            <label>Card Number</label>
+                            <input type="text" v-model="cardData.pan" placeholder="0000 0000 0000 0000" maxlength="19" @input="formatCardNumber">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Month</label>
+                                <input type="text" v-model="cardData.expMonth" placeholder="MM" maxlength="2" @input="onlyNumbers">
+                            </div>
+                            <div class="form-group">
+                                <label>Year</label>
+                                <input type="text" v-model="cardData.expYear" placeholder="YY" maxlength="2" @input="onlyNumbers">
+                            </div>
+                            <div class="form-group">
+                                <label>CVV</label>
+                                <input type="text" v-model="cardData.cvv" placeholder="123" maxlength="4" @input="onlyNumbers">
+                            </div>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="saveProfile" v-model="cardData.saveProfile">
+                            <label for="saveProfile">Remember this card</label>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" @click="$emit('prev')">Back</button>
+                        <button class="btn btn-primary" @click="submitCard">Add Card</button>
+                    </div>
+                </div>
+            `,
+            props: ['progress'],
+            emits: ['next', 'prev', 'checkout-card'],
+            data() {
+                return {
+                    cardData: {
+                        cardName: '',
+                        pan: '',
+                        expMonth: '',
+                        expYear: '',
+                        cvv: '',
+                        saveProfile: true
+                    }
+                };
+            },
+            methods: {
+                formatCardNumber(e) {
+                    let value = e.target.value.replace(/\s/g, '');
+                    value = value.replace(/(\d{4})/g, '$1 ').trim();
+                    this.cardData.pan = value;
+                },
+                onlyNumbers(e) {
+                    e.target.value = e.target.value.replace(/\D/g, '');
+                },
+                submitCard() {
+                    if (this.cardData.pan && this.cardData.expMonth && this.cardData.expYear && this.cardData.cvv) {
+                        this.$emit('checkout-card', this.cardData);
+                    } else {
+                        alert('Please complete all fields');
+                    }
+                }
+            }
+        };
+
+        // ========== Step 4: OTP Component ==========
+        const OtpStep = {
+            template: `
+                <div class="step-content">
+                    <div style="margin-bottom: 24px;">
+                        <div class="progress-bar">
+                             <div class="progress-step active" style="width: 20px; border-radius: 3px;"></div>
+                             <div class="progress-step active" style="width: 20px; border-radius: 3px;"></div>
+                             <div class="progress-step active" style="width: 20px; border-radius: 3px;"></div>
+                        </div>
+                    </div>
+
+                    <h2 class="step-title">Enter Code</h2>
+                    <p class="step-subtitle">We sent a code to your email. <br>Please enter it below.</p>
+
+                    <div class="section">
+                        <div class="otp-group">
+                            <input 
+                                v-for="(digit, index) in otpDigits" 
+                                :key="index"
+                                class="otp-input"
+                                v-model="otpDigits[index]"
+                                type="text"
+                                maxlength="1"
+                                placeholder=""
+                                @input="handleOtpInput(index, $event)"
+                                @keydown="handleOtpKeydown(index, $event)"
+                                @focus="$event.target.select()"
+                            >
+                        </div>
+                        <div style="text-align: center;">
+                            <button class="btn-secondary" style="border: none; font-size: 13px;">Resend Code</button>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" @click="handleVerify">Verify & Continue</button>
+                        <button class="btn btn-secondary" @click="$emit('prev')">Cancel</button>
+                    </div>
+                </div>
+            `,
+            props: ['progress'],
+            emits: ['verify-otp', 'prev'],
+            data() {
+                return { otpDigits: ['', '', '', '', '', ''] };
+            },
+            methods: {
+                handleOtpInput(index, event) {
+                    const value = event.target.value;
+                    if (value && /^\d$/.test(value)) {
+                        if (index < 5) {
+                            const inputs = document.querySelectorAll('.otp-input');
+                            if (inputs[index + 1]) inputs[index + 1].focus();
+                        } else {
+                            // Auto verify on last digit
+                            document.activeElement.blur();
+                            // Optional: auto-submit
+                            // this.handleVerify();
+                        }
+                    }
+                },
+                handleOtpKeydown(index, event) {
+                    if (event.key === 'Backspace' && !this.otpDigits[index]) {
+                        if (index > 0) {
+                            const inputs = document.querySelectorAll('.otp-input');
+                            if (inputs[index - 1]) inputs[index - 1].focus();
+                        }
+                    }
+                },
+                handleVerify() {
+                    const otp = this.otpDigits.join('');
+                    if (otp.length === 6) {
+                        this.$emit('verify-otp', otp);
+                    } else {
+                        alert('Please enter complete 6-digit code');
+                    }
+                }
+            }
+        };
+
+        // ========== Success Component ==========
+        const SuccessStep = {
+            template: `
+                <div class="success-message show" style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+                    <div class="success-icon">✓</div>
+                    <h2 style="color: var(--visa-blue); margin-bottom: 8px;">Payment Successful</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 32px;">Your transaction has been processed.</p>
+                    
+                    <div style="background: #F8F9FA; padding: 20px; border-radius: 12px; margin-bottom: 32px; text-align: left; border: 1px solid #E1E4E8;">
+                        <div style="font-size: 11px; color: #5f6368; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Transaction Receipt</div>
+                        <div style="font-size: 14px; color: #202124; line-height: 2;">
+                            <div style="display: flex; justify-content: space-between;"><strong>Amount:</strong> <span>$100.00 USD</span></div>
+                            <div style="display: flex; justify-content: space-between;"><strong>Date:</strong> <span>{{ new Date().toLocaleDateString() }}</span></div>
+                            <div style="display: flex; justify-content: space-between;"><strong>ID:</strong> <span style="font-family: monospace;">{{ transactionId.substring(0, 12) }}...</span></div>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" @click="$emit('reset')" style="width: 100%;">
+                        Return to Merchant
+                    </button>
+                </div>
+            `,
+            props: ['transactionId'],
+            emits: ['reset']
+        };
+
+        // ========== Main App ==========
+        createApp({
+            components: {
+                ConfigStep,
+                FindCardStep,
+                SelectCardStep,
+                AddCardStep,
+                OtpStep,
+                SuccessStep
+            },
+            setup() {
+                const currentStep = ref('config');
+                const isLoading = ref(false);
+                const loadingText = ref('');
+                const loadingSubtext = ref('');
+                const isSdkLoaded = ref(false);
+                const transactionId = ref('');
+                const cards = ref([]);
+                const selectedCardId = ref(null);
+
+                const config = ref({
+                    dpaId: '',
+                    publicKey: ''
+                });
+
+                const form = ref({
+                    email: ''
+                });
+
+                const steps = ['config', 'findCard', 'selectCard', 'addCard', 'otp', 'success'];
+
+                const progress = computed(() => {
+                    const idx = steps.indexOf(currentStep.value);
+                    return idx >= 0 ? idx : 0;
+                });
+
+                const addLog = (message, details = null, type = 'info') => {
+                    const timestamp = new Date().toLocaleTimeString('zh-TW');
+                    console.log(`[${timestamp}] ${message}`, details || '');
+                };
+
+                const saveConfig = () => {
+                    if (config.value.dpaId) {
+                        addLog('Config Saved', { dpaId: config.value.dpaId });
+                    }
+                };
+
+                const loadAndInitSdk = () => {
+                    if (!config.value.dpaId) return;
+                    isLoading.value = true;
+                    loadingText.value = 'Initializing Secure Connection';
+                    loadingSubtext.value = 'Connecting to Visa Network...';
+
+                    // Cleanup old script
+                    const existingScript = document.getElementById('visa-sdk-script');
+                    if (existingScript) existingScript.remove();
+
+                    const script = document.createElement('script');
+                    script.id = 'visa-sdk-script';
+                    script.src = `https://sandbox.secure.checkout.visa.com/checkout-widget/resources/js/integration/v2/sdk.js?dpaId=${config.value.dpaId}&cardBrands=VISA,MASTERCARD,AMEX`;
+
+                    script.onload = () => {
+                        if (window.VSDK) {
+                            window.VSDK.initialize({
+                                dpaTransactionOptions: { dpaLocale: 'zh_TW' }
+                            }).then(() => {
+                                isSdkLoaded.value = true;
+                                isLoading.value = false;
+                                addLog('SDK Initialized');
+                                currentStep.value = 'findCard';
+                            }).catch((e) => {
+                                addLog('SDK Init Error', e.message, 'error');
+                                isLoading.value = false;
+                            });
+                        }
+                    };
+
+                    script.onerror = () => {
+                        addLog('Script Load Failed', 'Check DPA ID', 'error');
+                        isLoading.value = false;
+                    };
+
+                    document.head.appendChild(script);
+                };
+
+                const getCards = async (email) => {
+                    if (!window.VSDK) {
+                        addLog('SDK Not Initialized', null, 'error');
+                        return;
+                    }
+
+                    isLoading.value = true;
+                    loadingText.value = 'Checking Profile';
+                    loadingSubtext.value = 'Looking up your cards...';
+
+                    try {
+                        form.value.email = email;
+                        const res = await window.VSDK.getCards({
+                            consumerIdentity: {
+                                identityValue: email,
+                                identityType: 'EMAIL_ADDRESS'
+                            }
+                        });
+
+                        handleCardResponse(res);
+                    } catch (e) {
+                        addLog('Get Cards Failed', e.message, 'error');
+                        isLoading.value = false;
+                    }
+                };
+
+                const verifyOtp = async (otp) => {
+                    if (!window.VSDK) {
+                        addLog('SDK Not Initialized', null, 'error');
+                        return;
+                    }
+
+                    isLoading.value = true;
+                    loadingText.value = 'Verifying';
+                    loadingSubtext.value = 'Checking security code...';
+
+                    try {
+                        const res = await window.VSDK.getCards({
+                            consumerIdentity: {
+                                identityValue: form.value.email,
+                                identityType: 'EMAIL_ADDRESS'
+                            },
+                            validationData: otp
+                        });
+
+                        handleCardResponse(res);
+                    } catch (e) {
+                        addLog('OTP Verify Failed', e.message, 'error');
+                        isLoading.value = false;
+                    }
+                };
+
+                const handleCardResponse = (res) => {
+                    isLoading.value = false;
+                    addLog('Response:', res.actionCode);
+
+                    if (res.actionCode === 'SUCCESS') {
+                        if (res.profiles?.length && res.profiles[0].maskedCards?.length) {
+                            cards.value = res.profiles.flatMap(p => p.maskedCards);
+                            currentStep.value = 'selectCard';
+                        } else {
+                            currentStep.value = 'addCard';
+                        }
+                    } else if (res.actionCode === 'PENDING_CONSUMER_IDV') {
+                        currentStep.value = 'otp';
+                    } else if (res.actionCode === 'ADD_CARD') {
+                        currentStep.value = 'addCard';
+                    }
+                };
+
+                const checkout = async () => {
+                    if (!selectedCardId.value || !window.VSDK) {
+                        addLog('Error', 'No card selected', 'error');
+                        return;
+                    }
+
+                    isLoading.value = true;
+                    loadingText.value = 'Processing Payment';
+                    loadingSubtext.value = 'Securely contacting issuer...';
+
+                    try {
+                        const res = await window.VSDK.checkout({
+                            srcDigitalCardId: selectedCardId.value,
+                            dpaTransactionOptions: {
+                                transactionAmount: {
+                                    transactionAmount: '100',
+                                    transactionCurrencyCode: 'USD'
+                                }
+                            }
+                        });
+
+                        if (res.actionCode === 'SUCCESS') {
+                            transactionId.value = res.checkoutResponse?.transactionId || 'TXN' + Date.now();
+                            currentStep.value = 'success';
+                        } else {
+                            addLog('Checkout Failed', res.actionCode, 'error');
+                        }
+                    } catch (e) {
+                        addLog('Checkout Error', e.message, 'error');
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const checkoutCard = async (cardData) => {
+                    if (!window.VSDK || !config.value.publicKey) {
+                        addLog('Error', 'Missing SDK or Public Key', 'error');
+                        return;
+                    }
+
+                    isLoading.value = true;
+                    loadingText.value = 'Encrypting';
+                    loadingSubtext.value = 'Securing card data...';
+
+                    try {
+                        const cardPayload = {
+                            primaryAccountNumber: cardData.pan.replace(/\s/g, ''),
+                            panExpirationMonth: cardData.expMonth,
+                            panExpirationYear: cardData.expYear,
+                            cardSecurityCode: cardData.cvv
+                        };
+
+                        const publicKey = await window.jose.importSPKI(config.value.publicKey, 'RSA-OAEP-256');
+                        const jwe = await new window.jose.CompactEncrypt(
+                            new TextEncoder().encode(JSON.stringify(cardPayload))
+                        )
+                            .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
+                            .encrypt(publicKey);
+
+                        loadingText.value = 'Processing';
+
+                        const complianceSettings = cardData.saveProfile ? {
+                            complianceResources: [
+                                {
+                                    complianceType: 'PRIVACY_POLICY',
+                                    uri: 'https://secure.checkout.visa.com/privacy'
+                                },
+                                {
+                                    complianceType: 'TERMS_AND_CONDITIONS',
+                                    uri: 'https://secure.checkout.visa.com/terms'
+                                }
+                            ]
+                        } : undefined;
+
+                        const res = await window.VSDK.checkout({
+                            encryptedCard: jwe,
+                            complianceSettings,
+                            consumer: {
+                                consumerIdentity: {
+                                    identityValue: form.value.email,
+                                    identityType: 'EMAIL_ADDRESS'
+                                }
+                            },
+                            dpaTransactionOptions: {
+                                transactionAmount: {
+                                    transactionAmount: '100',
+                                    transactionCurrencyCode: 'USD'
+                                }
+                            }
+                        });
+
+                        if (res.actionCode === 'SUCCESS') {
+                            transactionId.value = res.checkoutResponse?.transactionId || 'TXN' + Date.now();
+                            currentStep.value = 'success';
+                        } else {
+                            addLog('Add Card Failed', res.actionCode, 'error');
+                        }
+                    } catch (e) {
+                        addLog('Encryption Error', e.message, 'error');
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const handleReset = () => {
+                    currentStep.value = 'findCard';
+                    cards.value = [];
+                    selectedCardId.value = null;
+                    form.value.email = '';
+                };
+
+                return {
+                    currentStep,
+                    isLoading,
+                    loadingText,
+                    loadingSubtext,
+                    isSdkLoaded,
+                    config,
+                    form,
+                    cards,
+                    transactionId,
+                    progress,
+                    saveConfig,
+                    loadAndInitSdk,
+                    getCards,
+                    verifyOtp,
+                    checkout,
+                    checkoutCard,
+                    handleReset
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
