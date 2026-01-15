@@ -143,6 +143,24 @@
         `,
       });
 
+      const Toast = defineComponent({
+        props: ["show", "message", "type"],
+        template: `
+          <transition name="fade">
+            <div v-if="show" class="fixed top-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-lg text-white font-medium flex items-center gap-2"
+                 :class="type === 'error' ? 'bg-red-500' : 'bg-green-500'">
+                <div v-if="type === 'error'" class="w-5 h-5">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <div v-else class="w-5 h-5">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                {{ message }}
+            </div>
+          </transition>
+        `,
+      });
+
       // --- Login Step Components ---
 
       const TabGroup = defineComponent({
@@ -489,7 +507,7 @@
         emits: ["select"],
         template: `
           <div 
-            @click="$emit('select', card.id)"
+            @click="$emit('select', card.srcDigitalCardId)"
             class="w-full flex flex-col items-start px-[20px] py-[12px] border-solid rounded-[8px] cursor-pointer transition-colors"
             :class="selected ? 'border-2 border-[#e5e7eb] bg-[#f5f5f5]' : 'border border-[#d1d5dc] bg-white'"
           >
@@ -516,18 +534,21 @@
       });
 
       const ManualEntryOption = defineComponent({
-        components: { InputField },
+        components: { InputField, CheckboxField },
         props: {
           selected: { type: Boolean, default: false },
+          cardNumber: String,
+          expiry: String,
+          cvc: String,
+          rememberMe: Boolean,
         },
-        emits: ["select"],
-        setup() {
-          const cardNumber = ref("");
-          const expiry = ref("");
-          const cvc = ref("");
-
-          return { cardNumber, expiry, cvc };
-        },
+        emits: [
+          "select",
+          "update:cardNumber",
+          "update:expiry",
+          "update:cvc",
+          "update:rememberMe",
+        ],
         template: `
           <div 
             @click="$emit('select')"
@@ -544,7 +565,8 @@
             <div v-if="selected" class="w-full flex flex-col gap-[16px] px-0 py-[8px]">
                  <input-field 
                     label="輸入卡面號碼" 
-                    v-model="cardNumber" 
+                    :model-value="cardNumber"
+                    @update:model-value="$emit('update:cardNumber', $event)"
                     icon="card" 
                     :has-icon-bg="true"
                     maxlength="19"
@@ -554,7 +576,8 @@
                      <div class="flex-1">
                         <input-field 
                             label="效期 (MM/YY)" 
-                            v-model="expiry" 
+                            :model-value="expiry"
+                            @update:model-value="$emit('update:expiry', $event)"
                             maxlength="5"
                             rule="expiry"
                         ></input-field>
@@ -562,12 +585,24 @@
                      <div class="flex-1">
                         <input-field 
                             label="安全碼" 
-                            v-model="cvc" 
+                            :model-value="cvc"
+                            @update:model-value="$emit('update:cvc', $event)"
                             maxlength="3"
                             inputmode="numeric"
                             rule="cvc"
                         ></input-field>
                      </div>
+                 </div>
+                 <div class="w-full mt-2">
+                    <checkbox-field 
+                        :model-value="rememberMe" 
+                        @update:model-value="$emit('update:rememberMe', $event)"
+                        label="將此卡片與 Click to Pay 連結"
+                    >
+                        <template #icon>
+                            <img src="public/ic_click-to-pay.svg" class="object-contain mr-2" />
+                        </template>
+                    </checkbox-field>
                  </div>
             </div>
           </div>
@@ -588,6 +623,13 @@
           const selectedOption = ref("manual");
           const userPhone = "+882 9·····234";
 
+          const manualCard = ref({
+            cardNumber: "",
+            expiry: "",
+            cvc: "",
+            rememberMe: true,
+          });
+
           const isExpanded = ref(false);
           const visibleCards = computed(() => {
             const list = props.cards || [];
@@ -601,7 +643,9 @@
           const handlePay = () => {
             let selectedSrcDigitalCardId = null;
             if (selectedOption.value !== "manual") {
-              const card = props.cards.find((c) => c.id === selectedOption.value);
+              const card = props.cards.find(
+                (c) => c.srcDigitalCardId === selectedOption.value
+              );
               if (card) {
                 selectedSrcDigitalCardId = card.srcDigitalCardId;
               }
@@ -610,12 +654,14 @@
             emit("pay", {
               srcDigitalCardId: selectedSrcDigitalCardId,
               isManual: selectedOption.value === "manual",
+              ...manualCard.value,
             });
           };
 
           return {
             selectedOption,
             userPhone,
+            manualCard,
             handlePay,
             visibleCards,
             isExpanded,
@@ -650,10 +696,10 @@
                                 <div class="flex flex-col gap-[12px]">
                                     <card-option 
                                       v-for="card in visibleCards"
-                                      :key="card.id"
+                                      :key="card.srcDigitalCardId"
                                       :card="card" 
-                                      :selected="selectedOption === card.id"
-                                      @select="selectedOption = card.id"
+                                      :selected="selectedOption === card.srcDigitalCardId"
+                                      @select="selectedOption = card.srcDigitalCardId"
                                     ></card-option>
                                 </div>
                                 <div 
@@ -670,6 +716,10 @@
                                 <div class="h-[10px] w-full"></div>
                                 <manual-entry-option 
                                   :selected="selectedOption === 'manual'"
+                                  v-model:cardNumber="manualCard.cardNumber"
+                                  v-model:expiry="manualCard.expiry"
+                                  v-model:cvc="manualCard.cvc"
+                                  v-model:rememberMe="manualCard.rememberMe"
                                   @select="selectedOption = 'manual'"
                                 ></manual-entry-option>
                             </div>
@@ -686,7 +736,7 @@
                     </div>
                 </div>
             </div>
-            `
+            `,
       });
 
       // --- Register Components ---
@@ -820,6 +870,48 @@
         `,
       });
 
+      const SuccessStep = defineComponent({
+        components: { NavigationBar, HeaderTitle, ActionButton },
+        emits: ["done"],
+        template: `
+            <div class="w-full flex justify-center bg-[#eff5ff] min-h-screen pt-[52px] pb-[50px]">
+                <div class="flex flex-col items-center w-full max-w-[603px]">
+                    <div class="w-full flex flex-col bg-white rounded-t-[12px] overflow-hidden shadow-section">
+                        <div class="w-full bg-[#fafafa] flex items-center justify-between px-[20px] py-[4px] border-b border-transparent">
+                             <div class="p-[8px] cursor-pointer" @click="$emit('done')">
+                                 <span class="text-[16px] text-[#6a7282] font-sans">完成</span>
+                             </div>
+                             <div class="flex items-center gap-[9px] bg-white border border-[#e5e7eb] rounded-[6px] px-[20px] py-[7px]">
+                                 <span class="text-[12px] font-bold text-[rgba(0,0,0,0.87)] font-sans">中文</span>
+                             </div>
+                        </div>
+                        <div class="w-full bg-[#fafafa] px-[20px] py-[5px]">
+                            <h2 class="text-[20px] font-bold text-[rgba(0,0,0,0.87)] font-sans leading-[30px]">歡迎使用 Click to Pay</h2>
+                        </div>
+                        <div class="bg-white flex flex-col items-center px-[40px] pt-[60px] pb-[60px] w-full z-10 shadow-[0px_1px_2px_-1px_rgba(0,0,0,0.1)]">
+                            <div class="w-[80px] h-[80px] bg-[#e6f2ff] rounded-full flex items-center justify-center mb-[24px]">
+                                <svg class="w-[40px] h-[40px] text-[#005bd3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </div>
+                            <h2 class="text-[24px] font-bold text-[#141413] mb-[12px] font-sans">支付已完成</h2>
+                            <p class="text-[16px] text-[#6a7282] text-center font-sans tracking-tight">
+                                隨便塞的文字，支付成功的訊息可以在這裡顯示給使用者看，下次記得多買一點。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="w-full bg-white flex flex-col p-[20px] shadow-form rounded-b-[12px] z-0">
+                       <action-button 
+                           text="完成" 
+                           :primary="true" 
+                           @click="$emit('done')"
+                       ></action-button>
+                    </div>
+                </div>
+            </div>
+        `,
+      });
+
       // --- Root App ---
 
       const RootComponent = defineComponent({
@@ -829,6 +921,8 @@
           SelectCardStep,
           RegisterStep,
           LoadingOverlay,
+          Toast,
+          SuccessStep,
         },
         setup() {
           const currentStep = ref("LoginStep");
@@ -841,6 +935,33 @@
           const identityType = ref("");
           const identityValue = ref("");
 
+          const toast = ref({
+            show: false,
+            message: "",
+            type: "success",
+          });
+
+          const showToast = (message, type = "success") => {
+            toast.value.message = message;
+            toast.value.type = type;
+            toast.value.show = true;
+            setTimeout(() => {
+              toast.value.show = false;
+            }, 3000);
+          };
+
+          const safeAction = async (action, errorMsg = "系統錯誤") => {
+            try {
+              return await action();
+            } catch (error) {
+              console.error(error);
+              showToast(`${errorMsg}: ${error.message || error}`, "error");
+              throw error;
+            } finally {
+              hideLoading();
+            }
+          };
+
           const showLoading = (text, subtext = "") => {
             isLoading.value = true;
             loadingText.value = text;
@@ -848,6 +969,33 @@
           };
           const hideLoading = () => {
             isLoading.value = false;
+          };
+
+          // --- Mastercard SDK Wrappers ---
+          const encryptCard = async (payload) => {
+            const [month, year] = payload.expiry.split("/");
+            return await mcCheckoutService.encryptCard({
+              primaryAccountNumber: payload.cardNumber.replace(/\s/g, ""),
+              panExpirationMonth: month,
+              panExpirationYear: year,
+              cardSecurityCode: payload.cvc,
+            });
+          };
+
+          const checkoutCard = async (cardId, popup) => {
+            return await mcCheckoutService.checkoutWithCard({
+              srcDigitalCardId: cardId,
+              windowRef: popup,
+            });
+          };
+
+          const checkoutNewCard = async (encryptRes, rememberMe, popup) => {
+            return await mcCheckoutService.checkoutWithNewCard({
+              encryptedCard: encryptRes.encryptedCard,
+              cardBrand: encryptRes.cardBrand,
+              windowRef: popup,
+              rememberMe,
+            });
           };
 
           const openPopup = () => {
@@ -863,153 +1011,68 @@
           };
 
           const handleLoginNext = async (payload) => {
-            // payload: { type: 'email'|'phone', value: string }
             identityType.value = payload.type;
             identityValue.value = payload.value;
 
-            showLoading("正在驗證身份...");
-
-            try {
+            await safeAction(async () => {
+              showLoading("正在驗證身份...");
               const lookupRequest = { [payload.type]: payload.value };
-              console.log("Calling idLookup:", lookupRequest);
               const lookupRes = await mcCheckoutService.idLookup(lookupRequest);
-              console.log("idLookup Response:", lookupRes);
 
               if (lookupRes?.consumerPresent) {
-                // Consumer found, initiate validation
                 showLoading("正在發送驗證碼...");
                 const initRes = await mcCheckoutService.initiateValidation();
-                console.log("initiateValidation Response:", initRes);
-
                 otpDestination.value =
                   initRes?.maskedValidationChannel || payload.value;
-
-                hideLoading();
                 currentStep.value = "OtpStep";
               } else {
-                // Consumer not found
-                console.log("Consumer not found");
-                hideLoading();
                 currentStep.value = "RegisterStep";
               }
-            } catch (error) {
-              console.error("Login Error:", error);
-              hideLoading();
-              alert("系統錯誤: " + (error.message || error));
-            }
+            }, "驗證失敗").catch(() => {});
           };
 
           const handleOtpNext = async (otpCode) => {
-            showLoading("正在驗證...", "請稍候");
-            try {
-              const validateRes = await mcCheckoutService.validate({
-                value: otpCode,
-              });
-              console.log("validate Response:", validateRes);
-
+            await safeAction(async () => {
+              showLoading("正在驗證...", "請稍候");
+              await mcCheckoutService.validate({ value: otpCode });
               const cardsRes = await mcCheckoutService.getCards();
-              console.log("getCards Response:", cardsRes);
-
               cards.value = cardsRes || [];
-
-              hideLoading();
               currentStep.value = "SelectCardStep";
-            } catch (error) {
-              console.error("OTP Validation Error:", error);
-              hideLoading();
-              alert("驗證失敗，請重試");
-            }
+            }, "驗證失敗").catch(() => {});
           };
 
           const handlePayment = async (payload) => {
-            // payload: { srcDigitalCardId: string, isManual: boolean }
-            if (payload.isManual) {
-              alert("手動輸入流程尚未實作");
+            const popup = openPopup();
+            if (!popup) {
+              showToast("無法開啟支付視窗，請檢查瀏覽器設定", "error");
               return;
             }
 
-            const popup = openPopup();
-            if (!popup) {
-                alert("無法開啟支付視窗，請檢查瀏覽器設定");
-                return;
-            }
+            await safeAction(async () => {
+              showLoading("正在處理支付...");
+              let checkoutRes;
 
-            showLoading("正在處理支付...");
-            try {
-              const checkoutRequest = {
-                srcDigitalCardId: payload.srcDigitalCardId,
-                windowRef: popup,
-              };
-              console.log("Calling checkoutWithCard:", checkoutRequest);
-              const checkoutRes = await mcCheckoutService.checkoutWithCard(
-                checkoutRequest
-              );
-              console.log("checkoutWithCard Response:", checkoutRes);
+              if (payload.isManual) {
+                const encryptRes = await encryptCard(payload);
+                checkoutRes = await checkoutNewCard(
+                  encryptRes,
+                  payload.rememberMe || false,
+                  popup
+                );
+              } else {
+                checkoutRes = await checkoutCard(payload.srcDigitalCardId, popup);
+              }
 
-              popup.close();
-              hideLoading();
-              alert("支付成功! ActionCode: " + checkoutRes.checkoutActionCode);
-            } catch (error) {
-              console.error("Checkout Error:", error);
-              popup.close();
-              hideLoading();
-              alert("支付失敗: " + error.message);
-            }
+              showToast("支付成功!");
+              currentStep.value = "SuccessStep";
+            }, "支付失敗")
+              .finally(() => popup.close())
+              .catch(() => {});
           };
 
           const handleRegisterNext = async (payload) => {
-            const popup = openPopup();
-            if (!popup) {
-                alert("無法開啟支付視窗，請檢查瀏覽器設定");
-                return;
-            }
-
-            showLoading("正在處理支付...", "請稍候");
-            try {
-              const [month, year] = payload.expiry.split("/");
-              // encryptCard expects 2-digit year (YY)
-              // payload.expiry is MM/YY, so we can use 'year' directly.
-
-              const encryptRequest = {
-                  primaryAccountNumber: payload.cardNumber.replace(/\s/g, ""),
-                  panExpirationMonth: month,
-                  panExpirationYear: year,
-                  cardSecurityCode: payload.cvc
-              };
-
-              console.log("Calling encryptCard:", encryptRequest);
-              const encryptRes = await mcCheckoutService.encryptCard(encryptRequest);
-              console.log("encryptCard Response:", encryptRes);
-
-              const newCardRequest = {
-                encryptedCard: encryptRes.encryptedCard,
-                cardBrand: encryptRes.cardBrand,
-                windowRef: popup,
-                rememberMe: payload.rememberMe,
-              };
-
-              // Optional: Attach consumer identity if available to link/enroll
-              // if (identityValue.value && identityType.value === 'email') {
-              //     newCardRequest.consumer = { emailAddress: identityValue.value };
-              // }
-              // For phone, formatting requirements vary, omitting to avoid format errors for now.
-
-              console.log("Calling checkoutWithNewCard:", newCardRequest);
-              const checkoutRes = await mcCheckoutService.checkoutWithNewCard(
-                newCardRequest
-              );
-              console.log("checkoutWithNewCard Response:", checkoutRes);
-
-              popup.close();
-              hideLoading();
-              console.log("支付成功! ActionCode: " + checkoutRes.checkoutActionCode)
-              // alert("支付成功! ActionCode: " + checkoutRes.checkoutActionCode);
-            } catch (error) {
-              console.error("New Card Checkout Error:", error);
-              popup.close();
-              hideLoading();
-              alert("支付失敗: " + (error.message || error));
-            }
+            // RegisterStep just collects manual data and initiates a checkout.
+            await handlePayment({ ...payload, isManual: true });
           };
 
           const handleStepNext = (payload) => {
@@ -1028,6 +1091,27 @@
             } else if (currentStep.value === "OtpStep") {
               currentStep.value = "LoginStep";
             }
+          };
+
+          const debugSteps = [
+            "LoginStep",
+            "OtpStep",
+            "SelectCardStep",
+            "RegisterStep",
+            "SuccessStep",
+          ];
+          const setStep = (step) => {
+            if (step === "SelectCardStep" && cards.value.length === 0) {
+              cards.value = [
+                {
+                  srcDigitalCardId: "debug-1",
+                  panBin: "541234",
+                  panLastFour: "8888",
+                  digitalCardData: { artUri: "public/ic_mastercard.svg" },
+                },
+              ];
+            }
+            currentStep.value = step;
           };
 
           // Mastercard SDK Initialization
@@ -1064,14 +1148,32 @@
             isLoading,
             loadingText,
             loadingSubtext,
+            toast,
             handleStepNext,
             handlePrev,
             handlePayment,
+            debugSteps,
+            setStep,
           };
         },
         template: `
             <div class="relative w-full min-h-screen">
+                <!-- Debug Controls -->
+                <div class="fixed top-2 left-2 z-[9999] flex flex-col gap-1 bg-black/60 p-2 rounded text-[10px]">
+                    <span class="text-white font-bold mb-1">Debug Steps:</span>
+                    <button 
+                        v-for="step in debugSteps" 
+                        :key="step"
+                        @click="setStep(step)"
+                        class="px-2 py-1 rounded text-left"
+                        :class="currentStep === step ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800 hover:bg-white'"
+                    >
+                        {{ step }}
+                    </button>
+                </div>
+
                 <loading-overlay v-if="isLoading" :text="loadingText" :subtext="loadingSubtext"></loading-overlay>
+                <toast :show="toast.show" :message="toast.message" :type="toast.type"></toast>
                 <transition name="fade" mode="out-in">
                     <component 
                         :is="currentStep" 
@@ -1080,6 +1182,7 @@
                         @next="handleStepNext"
                         @pay="handlePayment"
                         @prev="handlePrev"
+                        @done="currentStep = 'LoginStep'"
                         @cancel="currentStep = 'LoginStep'"
                         @close="currentStep = 'LoginStep'"
                     ></component>
