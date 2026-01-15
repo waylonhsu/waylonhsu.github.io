@@ -196,9 +196,9 @@
                 </div>
                 <div class="h-[2px] w-full" :class="modelValue === 'email' ? 'bg-[#005bd3]' : 'bg-transparent'"></div>
              </div>
-             <div class="flex-1 flex flex-col items-center cursor-pointer relative" @click="$emit('update:modelValue', 'phone')">
+             <div class="flex-1 flex flex-col items-center cursor-pointer relative" @click="$emit('update:modelValue', 'mobileNumber')">
                 <div class="w-full flex justify-center px-[12px] py-[14px] rounded-tr-[6px]" :class="modelValue === 'phone' ? 'bg-[#eff5ff]' : 'bg-[#fafafa]'">
-                    <span class="text-[14px] leading-[20px]" :class="modelValue === 'phone' ? 'text-[#000000de] font-normal' : 'text-[#2f7cf5] font-normal'">手機</span>
+                    <span class="text-[14px] leading-[20px]" :class="modelValue === 'mobileNumber' ? 'text-[#000000de] font-normal' : 'text-[#2f7cf5] font-normal'">手機</span>
                 </div>
                 <div class="h-[2px] w-full" :class="modelValue === 'phone' ? 'bg-[#005bd3]' : 'bg-transparent'"></div>
              </div>
@@ -295,7 +295,7 @@
           const isValid = computed(() => {
             if (currentTab.value === "email")
               return emailValue.value.length > 3;
-            return phoneValue.value.length > 8;
+            return phoneValue.value.length > 4 && phoneValue.value.length <= 14 && phoneValue.value.substring(0, 1) !== "0";
           });
 
           const handleNext = () => {
@@ -324,7 +324,7 @@
                                     <p class="text-[14px] leading-[20px] font-semibold text-[#000000de]">輸入新的電子信箱或手機號碼，即可存取另一組關聯的卡片</p>
                                 </div>
                                 <input-field v-if="currentTab === 'email'" label="電子信箱" v-model="emailValue" icon="email"></input-field>
-                                <input-field v-else label="+886" v-model="phoneValue" icon="phone"></input-field>
+                                <input-field v-else label="+886 請輸入不包含 0 的手機號碼" v-model="phoneValue" maxlength="14" icon="phone"></input-field>
                             </div>
                             <login-info-box></login-info-box>
                         </div>
@@ -994,8 +994,8 @@
               .init({
                 srcDpaId: CONFIG.DPA_ID,
                 dpaData: {
-                    dpaName: CONFIG.DPA_NAME,
-                  },
+                  dpaName: CONFIG.DPA_NAME,
+                },
                 cardBrands: CONFIG.CARD_BRANDS,
                 dpaTransactionOptions: {
                   dpaLocale: CONFIG.DPA_LOCALE,
@@ -1025,9 +1025,14 @@
             const checkoutWithCardRequest = {
               srcDigitalCardId: cardId,
               windowRef: popup,
-            }
-            console.log("checkoutWithCard Request: %o", checkoutWithCardRequest);
-            return await mcCheckoutService.checkoutWithCard(checkoutWithCardRequest);
+            };
+            console.log(
+              "checkoutWithCard Request: %o",
+              checkoutWithCardRequest
+            );
+            return await mcCheckoutService.checkoutWithCard(
+              checkoutWithCardRequest
+            );
           };
 
           const checkoutNewCard = async (encryptRes, rememberMe, popup) => {
@@ -1037,8 +1042,13 @@
               windowRef: popup,
               rememberMe,
             };
-            console.log("checkoutWithNewCard Request: %o", checkoutWithNewCardRequest);
-            return await mcCheckoutService.checkoutWithNewCard(checkoutWithNewCardRequest);
+            console.log(
+              "checkoutWithNewCard Request: %o",
+              checkoutWithNewCardRequest
+            );
+            return await mcCheckoutService.checkoutWithNewCard(
+              checkoutWithNewCardRequest
+            );
           };
 
           const openPopup = () => {
@@ -1059,7 +1069,16 @@
 
             await safeAction(async () => {
               showLoading("正在驗證身份...");
-              const lookupRequest = { [payload.type]: payload.value };
+
+              let lookupRequest = {
+                [payload.type]:
+                  payload.type === "email"
+                    ? payload.value
+                    : {
+                        countryCode: "886",
+                        phoneNumber: payload.value.replace(/\D/g, ""),
+                      },
+              };
 
               console.log("ID Lookup Request: %o", lookupRequest);
 
