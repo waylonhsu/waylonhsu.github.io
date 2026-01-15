@@ -75,6 +75,13 @@
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script>
+      const CONFIG = {
+        DPA_ID: "4b03a667-6b18-467e-b046-e93c05e26176", // Replace with your actual DPA ID
+        DPA_NAME: "喬睿測試用",
+        CARD_BRANDS: ["mastercard", "visa"],
+        DPA_LOCALE: "zh_HK",
+      };
+
       const mcCheckoutService = new MastercardCheckoutServices();
       const { createApp, ref, computed, defineComponent, nextTick, onMounted } =
         Vue;
@@ -982,30 +989,56 @@
           };
 
           // --- Mastercard SDK Wrappers ---
+          const handleMcCheckoutServiceInit = () => {
+            mcCheckoutService
+              .init({
+                srcDpaId: CONFIG.DPA_ID,
+                dpaData: {
+                    dpaName: CONFIG.DPA_NAME,
+                  },
+                cardBrands: CONFIG.CARD_BRANDS,
+                dpaTransactionOptions: {
+                  dpaLocale: CONFIG.DPA_LOCALE,
+                },
+              })
+              .then(() => {
+                console.log("Mastercard SDK Initialized Successfully");
+              })
+              .catch((err) => {
+                console.error("Mastercard SDK Initialization Failed:", err);
+              });
+          };
+
           const encryptCard = async (payload) => {
             const [month, year] = payload.expiry.split("/");
-            return await mcCheckoutService.encryptCard({
+            const encryptedCardRequest = {
               primaryAccountNumber: payload.cardNumber.replace(/\s/g, ""),
               panExpirationMonth: month,
               panExpirationYear: year,
               cardSecurityCode: payload.cvc,
-            });
+            };
+            console.log("encryptedCard Request: %o", encryptedCardRequest);
+            return await mcCheckoutService.encryptCard(encryptedCardRequest);
           };
 
           const checkoutCard = async (cardId, popup) => {
-            return await mcCheckoutService.checkoutWithCard({
+            const checkoutWithCardRequest = {
               srcDigitalCardId: cardId,
               windowRef: popup,
-            });
+            }
+            console.log("checkoutWithCard Request: %o", checkoutWithCardRequest);
+            return await mcCheckoutService.checkoutWithCard(checkoutWithCardRequest);
           };
 
           const checkoutNewCard = async (encryptRes, rememberMe, popup) => {
-            return await mcCheckoutService.checkoutWithNewCard({
+            const checkoutWithNewCardRequest = {
               encryptedCard: encryptRes.encryptedCard,
               cardBrand: encryptRes.cardBrand,
               windowRef: popup,
               rememberMe,
-            });
+            };
+            console.log("checkoutWithNewCard Request: %o", checkoutWithNewCardRequest);
+            return await mcCheckoutService.checkoutWithNewCard(checkoutWithNewCardRequest);
           };
 
           const openPopup = () => {
@@ -1027,7 +1060,12 @@
             await safeAction(async () => {
               showLoading("正在驗證身份...");
               const lookupRequest = { [payload.type]: payload.value };
+
+              console.log("ID Lookup Request: %o", lookupRequest);
+
               const lookupRes = await mcCheckoutService.idLookup(lookupRequest);
+
+              console.log("ID Lookup Response: %o", lookupRes);
 
               if (lookupRes?.consumerPresent) {
                 showLoading("正在發送驗證碼...");
@@ -1038,7 +1076,7 @@
               } else {
                 currentStep.value = "RegisterStep";
               }
-            }, "驗證失敗").catch(() => {});
+            }, "驗證失敗");
           };
 
           const handleOtpNext = async (otpCode) => {
@@ -1048,7 +1086,7 @@
               const cardsRes = await mcCheckoutService.getCards();
               cards.value = cardsRes || [];
               currentStep.value = "SelectCardStep";
-            }, "驗證失敗").catch(() => {});
+            }, "驗證失敗");
           };
 
           const handlePayment = async (payload) => {
@@ -1064,20 +1102,25 @@
 
               if (payload.isManual) {
                 const encryptRes = await encryptCard(payload);
+
+                console.log("Encrypt Response: %o", encryptRes);
+
                 checkoutRes = await checkoutNewCard(
                   encryptRes,
                   payload.rememberMe || false,
                   popup
                 );
               } else {
-                checkoutRes = await checkoutCard(payload.srcDigitalCardId, popup);
+                checkoutRes = await checkoutCard(
+                  payload.srcDigitalCardId,
+                  popup
+                );
               }
+              console.log("Checkout Response: %o", checkoutRes);
 
               showToast("支付成功!");
               currentStep.value = "SuccessStep";
-            }, "支付失敗")
-              .finally(() => popup.close())
-              .catch(() => {});
+            }, "支付失敗").finally(() => popup.close());
           };
 
           const handleRegisterNext = async (payload) => {
@@ -1109,7 +1152,7 @@
             "SelectCardStep",
             "RegisterStep",
             "SuccessStep",
-            "showToast"
+            "showToast",
           ];
           const setStep = (step) => {
             if (step === "SelectCardStep" && cards.value.length === 0) {
@@ -1123,7 +1166,7 @@
               ];
             }
             if (step !== "showToast") {
-            currentStep.value = step;
+              currentStep.value = step;
             } else {
               showToast("這是一個測試通知", "success");
             }
@@ -1132,25 +1175,7 @@
           // Mastercard SDK Initialization
           onMounted(() => {
             if (mcCheckoutService) {
-              console.log("Mastercard SDK detected, initializing...");
-              mcCheckoutService
-                .init({
-                  srcDpaId: "4b03a667-6b18-467e-b046-e93c05e26176",
-                  dpaData: {
-                    dpaName: "DPA Name",
-                  },
-                  cardBrands: ["mastercard"],
-                  dpaTransactionOptions: {
-                    dpaLocale: "zh_HK",
-                  },
-                })
-                .then(() => {
-                  console.log("Mastercard SDK Initialized Successfully");
-                })
-                .catch((err) => {
-                  console.error("Mastercard SDK Initialization Failed:", err);
-                  // Since DPA_ID is a placeholder, this is expected to fail.
-                });
+              handleMcCheckoutServiceInit();
             } else {
               console.warn("Mastercard SDK script not loaded or blocked.");
             }
