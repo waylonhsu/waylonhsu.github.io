@@ -86,6 +86,34 @@
       const { createApp, ref, computed, defineComponent, nextTick, onMounted } =
         Vue;
 
+      // --- Utilities ---
+      const Utils = {
+        maskIdentity(val) {
+          if (!val) return "";
+          if (val.includes("@")) {
+            const [local, domain] = val.split("@");
+            if (local.length <= 2) return val;
+            return local[0] + "·····" + local[local.length - 1] + "@" + domain;
+          } else {
+            if (val.length <= 5) return val;
+            return val.substring(0, 3) + "·····" + val.substring(val.length - 2);
+          }
+        },
+        validateEmail(val) {
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+        },
+        formatCardNumber(val) {
+          return val.replace(/\D/g, "").substring(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
+        },
+        formatExpiry(val) {
+          let res = val.replace(/\D/g, "").substring(0, 4);
+          return res.length >= 2 ? res.substring(0, 2) + "/" + res.substring(2) : res;
+        },
+        formatCVC(val) {
+          return val.replace(/\D/g, "").substring(0, 3);
+        }
+      };
+
       // --- Common Components ---
 
       const NavigationBar = defineComponent({
@@ -220,19 +248,9 @@
         setup(props, { emit }) {
           const handleInput = (event) => {
             let val = event.target.value;
-
-            if (props.rule === "card") {
-              val = val.replace(/\D/g, "").substring(0, 16);
-              val = val.replace(/(\d{4})(?=\d)/g, "$1 ");
-            } else if (props.rule === "expiry") {
-              val = val.replace(/\D/g, "").substring(0, 4);
-              if (val.length >= 2) {
-                val = val.substring(0, 2) + "/" + val.substring(2);
-              }
-            } else if (props.rule === "cvc") {
-              val = val.replace(/\D/g, "").substring(0, 3);
-            }
-
+            if (props.rule === "card") val = Utils.formatCardNumber(val);
+            else if (props.rule === "expiry") val = Utils.formatExpiry(val);
+            else if (props.rule === "cvc") val = Utils.formatCVC(val);
             emit("update:modelValue", val);
           };
           return { handleInput };
@@ -298,11 +316,9 @@
           const emailValue = ref("");
           const phoneValue = ref("");
 
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
           const isValid = computed(() => {
             if (currentTab.value === "email")
-              return emailRegex.test(emailValue.value);
+              return Utils.validateEmail(emailValue.value);
             return (
               phoneValue.value.length > 4 &&
               phoneValue.value.length <= 14 &&
@@ -312,7 +328,7 @@
 
           const emailError = computed(() => {
             if (emailValue.value.length === 0) return false;
-            return !emailRegex.test(emailValue.value);
+            return !Utils.validateEmail(emailValue.value);
           });
           const phoneError = computed(() => {
             if (phoneValue.value.length === 0) return false;
@@ -692,22 +708,7 @@
         emits: ["pay", "cancel", "sign-out"],
         setup(props, { emit }) {
           const selectedOption = ref("manual");
-          const maskedIdentityValue = computed(() => {
-            const val = props.identityValue || "";
-            if (val.includes("@")) {
-              const [local, domain] = val.split("@");
-              if (local.length <= 2) return val;
-              return (
-                local[0] + "·····" + local[local.length - 1] + "@" + domain
-              );
-            } else {
-              // 手機號碼遮罩 (保留前 3 後 2)
-              if (val.length <= 5) return val;
-              return (
-                val.substring(0, 3) + "·····" + val.substring(val.length - 2)
-              );
-            }
-          });
+          const maskedIdentityValue = computed(() => Utils.maskIdentity(props.identityValue));
 
           const manualCard = ref({
             cardNumber: "",
@@ -844,23 +845,7 @@
           const cvc = ref("");
           const rememberMe = ref(true);
 
-          const maskedIdentityValue = computed(() => {
-            console.log("Masking identity value:", props.identityValue);
-            const val = props.identityValue || "";
-            if (val.includes("@")) {
-              const [local, domain] = val.split("@");
-              if (local.length <= 2) return val;
-              return (
-                local[0] + "·····" + local[local.length - 1] + "@" + domain
-              );
-            } else {
-              // 手機號碼遮罩 (保留前 3 後 2)
-              if (val.length <= 5) return val;
-              return (
-                val.substring(0, 3) + "·····" + val.substring(val.length - 2)
-              );
-            }
-          });
+          const maskedIdentityValue = computed(() => Utils.maskIdentity(props.identityValue));
 
           const isValid = computed(() => {
             const rawCard = cardNumber.value.replace(/\D/g, "");
