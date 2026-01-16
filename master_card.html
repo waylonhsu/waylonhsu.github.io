@@ -303,7 +303,11 @@
           const isValid = computed(() => {
             if (currentTab.value === "email")
               return emailRegex.test(emailValue.value);
-            return phoneValue.value.length > 4 && phoneValue.value.length <= 14 && phoneValue.value.substring(0, 1) !== "0";
+            return (
+              phoneValue.value.length > 4 &&
+              phoneValue.value.length <= 14 &&
+              phoneValue.value.substring(0, 1) !== "0"
+            );
           });
 
           const emailError = computed(() => {
@@ -312,7 +316,11 @@
           });
           const phoneError = computed(() => {
             if (phoneValue.value.length === 0) return false;
-            return phoneValue.value.length < 5 || phoneValue.value.length > 14 || phoneValue.value.substring(0, 1) === "0";
+            return (
+              phoneValue.value.length < 5 ||
+              phoneValue.value.length > 14 ||
+              phoneValue.value.substring(0, 1) === "0"
+            );
           });
 
           const handleNext = () => {
@@ -326,7 +334,15 @@
             emit("next", payload);
           };
 
-          return { currentTab, emailValue, phoneValue, emailError, phoneError, isValid, handleNext };
+          return {
+            currentTab,
+            emailValue,
+            phoneValue,
+            emailError,
+            phoneError,
+            isValid,
+            handleNext,
+          };
         },
         template: `
             <div class="w-full flex justify-center bg-[#eff5ff] pt-[52px]">
@@ -560,9 +576,7 @@
                      <div class="flex flex-col flex-1 h-full justify-center">
                         <span class="text-[16px] text-[#101828] font-sans leading-[24px]">{{ card.bankName || 'Mastercard' }}</span>
                         <div class="flex items-center gap-[8px]">
-                            <div class="w-[38px] h-[24px] relative bg-gray-100/50 rounded flex items-center justify-center">
-                                <img :src="card.image || 'public/ic_c2p-card.svg'" class="h-[16px] w-auto" />
-                            </div>
+                                <img :src="card?.digitalCardData?.artUri || 'public/ic_c2p-card.svg'" class="h-[16px] w-auto" />
                             <span class="text-[16px] text-[#4a5565] font-sans">···· {{ card.last4 || card.panLastFour || '****' }}</span>
                         </div>
                      </div>
@@ -683,11 +697,15 @@
             if (val.includes("@")) {
               const [local, domain] = val.split("@");
               if (local.length <= 2) return val;
-              return local[0] + "·····" + local[local.length - 1] + "@" + domain;
+              return (
+                local[0] + "·····" + local[local.length - 1] + "@" + domain
+              );
             } else {
               // 手機號碼遮罩 (保留前 3 後 2)
               if (val.length <= 5) return val;
-              return val.substring(0, 3) + "·····" + val.substring(val.length - 2);
+              return (
+                val.substring(0, 3) + "·····" + val.substring(val.length - 2)
+              );
             }
           });
 
@@ -832,11 +850,15 @@
             if (val.includes("@")) {
               const [local, domain] = val.split("@");
               if (local.length <= 2) return val;
-              return local[0] + "·····" + local[local.length - 1] + "@" + domain;
+              return (
+                local[0] + "·····" + local[local.length - 1] + "@" + domain
+              );
             } else {
               // 手機號碼遮罩 (保留前 3 後 2)
               if (val.length <= 5) return val;
-              return val.substring(0, 3) + "·····" + val.substring(val.length - 2);
+              return (
+                val.substring(0, 3) + "·····" + val.substring(val.length - 2)
+              );
             }
           });
 
@@ -854,7 +876,9 @@
             return raw.length > 0 && (raw.length < 13 || raw.length > 19);
           });
           const expiryError = computed(() => {
-            return expiry.value.length > 0 && !/^\d{2}\/\d{2}$/.test(expiry.value);
+            return (
+              expiry.value.length > 0 && !/^\d{2}\/\d{2}$/.test(expiry.value)
+            );
           });
           const cvcError = computed(() => {
             const raw = cvc.value.replace(/\D/g, "");
@@ -1169,12 +1193,14 @@
               if (lookupRes?.consumerPresent) {
                 showLoading("正在發送驗證碼...");
                 const initRequest = {
-                  requestedValidationChannelId: payload.type === "email" ? "EMAIL" : "SMS",
+                  requestedValidationChannelId:
+                    payload.type === "email" ? "EMAIL" : "SMS",
                 };
                 console.log("Initiate Validation Request: %o", initRequest);
                 const initRes = await mcCheckoutService.initiateValidation(
                   initRequest
                 );
+                console.log("Initiate Validation Response: %o", initRes);
                 otpDestination.value =
                   initRes?.maskedValidationChannel || payload.value;
                 currentStep.value = "OtpStep";
@@ -1187,7 +1213,10 @@
           const handleOtpNext = async (otpCode) => {
             await safeAction(async () => {
               showLoading("正在驗證...", "請稍候");
-              await mcCheckoutService.validate({ value: otpCode });
+              const validateRes = await mcCheckoutService.validate({
+                value: otpCode,
+              });
+              console.log("Validate Response: %o", validateRes);
               const cardsRes = await mcCheckoutService.getCards();
               cards.value = cardsRes || [];
               currentStep.value = "SelectCardStep";
