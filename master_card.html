@@ -197,10 +197,10 @@
                 <div class="h-[2px] w-full" :class="modelValue === 'email' ? 'bg-[#005bd3]' : 'bg-transparent'"></div>
              </div>
              <div class="flex-1 flex flex-col items-center cursor-pointer relative" @click="$emit('update:modelValue', 'mobileNumber')">
-                <div class="w-full flex justify-center px-[12px] py-[14px] rounded-tr-[6px]" :class="modelValue === 'phone' ? 'bg-[#eff5ff]' : 'bg-[#fafafa]'">
+                <div class="w-full flex justify-center px-[12px] py-[14px] rounded-tr-[6px]" :class="modelValue === 'mobileNumber' ? 'bg-[#eff5ff]' : 'bg-[#fafafa]'">
                     <span class="text-[14px] leading-[20px]" :class="modelValue === 'mobileNumber' ? 'text-[#000000de] font-normal' : 'text-[#2f7cf5] font-normal'">手機</span>
                 </div>
-                <div class="h-[2px] w-full" :class="modelValue === 'phone' ? 'bg-[#005bd3]' : 'bg-transparent'"></div>
+                <div class="h-[2px] w-full" :class="modelValue === 'mobileNumber' ? 'bg-[#005bd3]' : 'bg-transparent'"></div>
              </div>
           </div>
         `,
@@ -212,6 +212,7 @@
           modelValue: String,
           icon: String,
           hasIconBg: Boolean,
+          isError: Boolean,
           rule: { type: String, default: "" }, // options: 'card', 'expiry', 'cvc'
         },
         emits: ["update:modelValue"],
@@ -238,7 +239,10 @@
         },
         template: `
             <div class="flex flex-col gap-[5px] w-full h-[52px] items-start relative shrink-0">
-                <div class="bg-white border border-[#9b9b9b] rounded-[8px] flex items-start w-full relative focus-within:ring-1 focus-within:ring-[#005bd3] focus-within:border-[#005bd3] overflow-hidden">
+                <div class="bg-white border rounded-[8px] flex items-start w-full relative focus-within:ring-1 overflow-hidden transition-colors"
+                     :class="isError 
+                        ? 'border-red-500 focus-within:ring-red-500 focus-within:border-red-500' 
+                        : 'border-[#9b9b9b] focus-within:ring-[#005bd3] focus-within:border-[#005bd3]'">
                     <div v-if="icon" class="flex items-center h-[52px] pl-[11px] pr-0 py-0 shrink-0" :class="hasIconBg ? '' : 'opacity-20'">
                         <div class="shrink-0" :class="hasIconBg ? 'w-[32px] h-[21px] bg-gray-100 rounded overflow-hidden' : 'w-[32px] h-[28px]'">
                              <img v-if="icon === 'email'" src="./public/ic_email.svg" class="w-full h-full" draggable="false">
@@ -256,8 +260,9 @@
                          />
                           <label class="absolute left-[11px] text-[#0000008a] transition-all duration-200 pointer-events-none font-sans
                                    peer-placeholder-shown:text-[14px] peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 
-                                   peer-focus:text-[12px] peer-focus:top-[0px] peer-focus:translate-y-0 peer-focus:text-[#005bd3]
-                                   peer-[&:not(:placeholder-shown)]:text-[12px] peer-[&:not(:placeholder-shown)]:top-[0px] peer-[&:not(:placeholder-shown)]:translate-y-0">
+                                   peer-focus:text-[12px] peer-focus:top-[0px] peer-focus:translate-y-0
+                                   peer-[&:not(:placeholder-shown)]:text-[12px] peer-[&:not(:placeholder-shown)]:top-[0px] peer-[&:not(:placeholder-shown)]:translate-y-0"
+                                   :class="isError ? 'peer-focus:text-red-500' : 'peer-focus:text-[#005bd3]'">
                                 {{ label }}
                          </label>
                     </div>
@@ -290,12 +295,24 @@
         emits: ["next"],
         setup(props, { emit }) {
           const currentTab = ref("email");
-          const emailValue = ref("someuser@example.com");
+          const emailValue = ref("");
           const phoneValue = ref("");
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
           const isValid = computed(() => {
             if (currentTab.value === "email")
-              return emailValue.value.length > 3;
+              return emailRegex.test(emailValue.value);
             return phoneValue.value.length > 4 && phoneValue.value.length <= 14 && phoneValue.value.substring(0, 1) !== "0";
+          });
+
+          const emailError = computed(() => {
+            if (emailValue.value.length === 0) return false;
+            return !emailRegex.test(emailValue.value);
+          });
+          const phoneError = computed(() => {
+            if (phoneValue.value.length === 0) return false;
+            return phoneValue.value.length < 5 || phoneValue.value.length > 14 || phoneValue.value.substring(0, 1) === "0";
           });
 
           const handleNext = () => {
@@ -309,7 +326,7 @@
             emit("next", payload);
           };
 
-          return { currentTab, emailValue, phoneValue, isValid, handleNext };
+          return { currentTab, emailValue, phoneValue, emailError, phoneError, isValid, handleNext };
         },
         template: `
             <div class="w-full flex justify-center bg-[#eff5ff] pt-[52px]">
@@ -323,8 +340,8 @@
                                 <div class="mb-[12px] flex justify-center text-center">
                                     <p class="text-[14px] leading-[20px] font-semibold text-[#000000de]">輸入新的電子信箱或手機號碼，即可存取另一組關聯的卡片</p>
                                 </div>
-                                <input-field v-if="currentTab === 'email'" label="電子信箱" v-model="emailValue" icon="email"></input-field>
-                                <input-field v-else label="+886 請輸入不包含 0 的手機號碼" v-model="phoneValue" maxlength="14" icon="phone"></input-field>
+                                <input-field v-if="currentTab === 'email'" label="電子信箱" v-model="emailValue" icon="email" :is-error="emailError"></input-field>
+                                <input-field v-else label="+886 請輸入不包含 0 的手機號碼" v-model="phoneValue" maxlength="14" icon="phone" :is-error="phoneError"></input-field>
                             </div>
                             <login-info-box></login-info-box>
                         </div>
@@ -446,7 +463,7 @@
           OrDivider,
         },
         props: ["otpDestination"],
-        emits: ["next"],
+        emits: ["next", "sign-out"],
         setup(props, { emit }) {
           const otpCode = ref("");
           const rememberMe = ref(false);
@@ -468,7 +485,7 @@
                         <div class="bg-white flex flex-col pb-[20px] px-[20px] w-full shadow-section rounded-[5px] z-10 pt-[20px]">
                             <div class="flex items-center justify-between w-full gap-[6px] mb-2">
                                 <span class="text-[14px] leading-[1.5] text-[#141413] font-sans">{{ otpDestination }}</span>
-                                <span class="text-[14px] leading-[1.5] text-[#005bd3] underline cursor-pointer font-sans">以其他帳戶登入</span>
+                                <span class="text-[14px] leading-[1.5] text-[#005bd3] underline cursor-pointer font-sans" @click="$emit('sign-out')">以其他帳戶登入</span>
                             </div>
                              <div class="flex flex-col w-full">
                                 <div class="mb-[20px]">
@@ -571,6 +588,21 @@
           "update:cvc",
           "update:rememberMe",
         ],
+        setup(props) {
+          const cardError = computed(() => {
+            const raw = (props.cardNumber || "").replace(/\D/g, "");
+            return raw.length > 0 && (raw.length < 13 || raw.length > 19);
+          });
+          const expiryError = computed(() => {
+            const val = props.expiry || "";
+            return val.length > 0 && !/^\d{2}\/\d{2}$/.test(val);
+          });
+          const cvcError = computed(() => {
+            const raw = (props.cvc || "").replace(/\D/g, "");
+            return raw.length > 0 && raw.length < 3;
+          });
+          return { cardError, expiryError, cvcError };
+        },
         template: `
           <div 
             @click="$emit('select')"
@@ -593,6 +625,7 @@
                     :has-icon-bg="true"
                     maxlength="19"
                     rule="card"
+                    :is-error="cardError"
                  ></input-field>
                  <div class="flex gap-[14px] w-full">
                      <div class="flex-1">
@@ -602,6 +635,7 @@
                             @update:model-value="$emit('update:expiry', $event)"
                             maxlength="5"
                             rule="expiry"
+                            :is-error="expiryError"
                         ></input-field>
                      </div>
                      <div class="flex-1">
@@ -612,6 +646,7 @@
                             maxlength="3"
                             inputmode="numeric"
                             rule="cvc"
+                            :is-error="cvcError"
                         ></input-field>
                      </div>
                  </div>
@@ -639,11 +674,22 @@
           CardOption,
           ManualEntryOption,
         },
-        props: ["cards"],
-        emits: ["pay", "cancel"],
+        props: ["cards", "identityValue"],
+        emits: ["pay", "cancel", "sign-out"],
         setup(props, { emit }) {
           const selectedOption = ref("manual");
-          const userPhone = "+882 9·····234";
+          const maskedIdentityValue = computed(() => {
+            const val = props.identityValue || "";
+            if (val.includes("@")) {
+              const [local, domain] = val.split("@");
+              if (local.length <= 2) return val;
+              return local[0] + "·····" + local[local.length - 1] + "@" + domain;
+            } else {
+              // 手機號碼遮罩 (保留前 3 後 2)
+              if (val.length <= 5) return val;
+              return val.substring(0, 3) + "·····" + val.substring(val.length - 2);
+            }
+          });
 
           const manualCard = ref({
             cardNumber: "",
@@ -682,7 +728,7 @@
 
           return {
             selectedOption,
-            userPhone,
+            maskedIdentityValue,
             manualCard,
             handlePay,
             visibleCards,
@@ -711,8 +757,8 @@
                                 <span class="text-[16px] font-semibold text-[rgba(0,0,0,0.6)] font-sans">信用卡</span>
                             </div>
                             <div class="flex items-center justify-between py-[12px] px-[8px]">
-                                <span class="text-[16px] text-[#4a5565] font-sans">{{ userPhone }}</span>
-                                <span class="text-[16px] text-[#005bd3] cursor-pointer font-sans py-[8px]">切換帳號</span>
+                                <span class="text-[16px] text-[#4a5565] font-sans">{{ maskedIdentityValue }}</span>
+                                <span class="text-[16px] text-[#005bd3] cursor-pointer font-sans py-[8px]" @click="$emit('sign-out')">切換帳號</span>
                             </div>
                             <div class="flex flex-col gap-[20px]">
                                 <div class="flex flex-col gap-[12px]">
@@ -772,12 +818,27 @@
           LoginInfoBox,
           CheckboxField,
         },
+        props: ["identityValue"],
         emits: ["next", "prev"],
         setup(props, { emit }) {
           const cardNumber = ref("");
           const expiry = ref("");
           const cvc = ref("");
           const rememberMe = ref(true);
+
+          const maskedIdentityValue = computed(() => {
+            console.log("Masking identity value:", props.identityValue);
+            const val = props.identityValue || "";
+            if (val.includes("@")) {
+              const [local, domain] = val.split("@");
+              if (local.length <= 2) return val;
+              return local[0] + "·····" + local[local.length - 1] + "@" + domain;
+            } else {
+              // 手機號碼遮罩 (保留前 3 後 2)
+              if (val.length <= 5) return val;
+              return val.substring(0, 3) + "·····" + val.substring(val.length - 2);
+            }
+          });
 
           const isValid = computed(() => {
             const rawCard = cardNumber.value.replace(/\D/g, "");
@@ -786,6 +847,18 @@
             const rawCvc = cvc.value.replace(/\D/g, "");
             const hasCvc = rawCvc.length >= 3 && rawCvc.length <= 4;
             return hasCard && hasExpiry && hasCvc;
+          });
+
+          const cardError = computed(() => {
+            const raw = cardNumber.value.replace(/\D/g, "");
+            return raw.length > 0 && (raw.length < 13 || raw.length > 19);
+          });
+          const expiryError = computed(() => {
+            return expiry.value.length > 0 && !/^\d{2}\/\d{2}$/.test(expiry.value);
+          });
+          const cvcError = computed(() => {
+            const raw = cvc.value.replace(/\D/g, "");
+            return raw.length > 0 && raw.length < 3;
           });
 
           const handleNext = () => {
@@ -802,6 +875,10 @@
             expiry,
             cvc,
             rememberMe,
+            maskedIdentityValue,
+            cardError,
+            expiryError,
+            cvcError,
             isValid,
             handleNext,
           };
@@ -823,7 +900,7 @@
                         </div>
                         <div class="bg-white flex flex-col px-[40px] pt-[20px] pb-[40px] w-full z-10 shadow-[0px_1px_2px_-1px_rgba(0,0,0,0.1)]">
                              <p class="text-[12px] text-[#aaa] mb-[24px] font-sans">
-                                未找到 a········r@example.com 的關聯卡片。請手動新增卡片與 Click to Pay 連結。
+                                未找到 {{ maskedIdentityValue }} 的關聯卡片。請手動新增卡片與 Click to Pay 連結。
                              </p>
                              <div class="flex flex-col gap-[20px]">
                                 <div class="flex gap-[16px]">
@@ -834,6 +911,7 @@
                                         :has-icon-bg="true"
                                         maxlength="19"
                                         rule="card"
+                                        :is-error="cardError"
                                     ></input-field>
                                 </div>
                                 <div class="flex gap-[8px]">
@@ -843,6 +921,7 @@
                                             v-model="expiry" 
                                             maxlength="5"
                                             rule="expiry"
+                                            :is-error="expiryError"
                                         ></input-field>
                                     </div>
                                     <div class="flex-1">
@@ -852,6 +931,7 @@
                                             maxlength="3"
                                             inputmode="numeric"
                                             rule="cvc"
+                                            :is-error="cvcError"
                                         ></input-field>
                                     </div>
                                 </div>
@@ -1088,7 +1168,13 @@
 
               if (lookupRes?.consumerPresent) {
                 showLoading("正在發送驗證碼...");
-                const initRes = await mcCheckoutService.initiateValidation();
+                const initRequest = {
+                  requestedValidationChannelId: payload.type === "email" ? "EMAIL" : "SMS",
+                };
+                console.log("Initiate Validation Request: %o", initRequest);
+                const initRes = await mcCheckoutService.initiateValidation(
+                  initRequest
+                );
                 otpDestination.value =
                   initRes?.maskedValidationChannel || payload.value;
                 currentStep.value = "OtpStep";
@@ -1145,6 +1231,20 @@
           const handleRegisterNext = async (payload) => {
             // RegisterStep just collects manual data and initiates a checkout.
             await handlePayment({ ...payload, isManual: true });
+          };
+
+          const handleSignOut = async () => {
+            await safeAction(async () => {
+              showLoading("正在登出...");
+              await mcCheckoutService.signOut();
+              showToast("已成功登出");
+              // Clear local state
+              identityValue.value = "";
+              identityType.value = "";
+              cards.value = [];
+              otpDestination.value = "";
+              currentStep.value = "LoginStep";
+            }, "登出失敗");
           };
 
           const handleStepNext = (payload) => {
@@ -1204,6 +1304,7 @@
             currentStep,
             cards,
             otpDestination,
+            identityValue,
             isLoading,
             loadingText,
             loadingSubtext,
@@ -1211,6 +1312,7 @@
             handleStepNext,
             handlePrev,
             handlePayment,
+            handleSignOut,
             debugSteps,
             setStep,
           };
@@ -1238,9 +1340,11 @@
                         :is="currentStep" 
                         :cards="cards"
                         :otp-destination="otpDestination"
+                        :identity-value="identityValue"
                         @next="handleStepNext"
                         @pay="handlePayment"
                         @prev="handlePrev"
+                        @sign-out="handleSignOut"
                         @done="currentStep = 'LoginStep'"
                         @cancel="currentStep = 'LoginStep'"
                         @close="currentStep = 'LoginStep'"
