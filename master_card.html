@@ -494,8 +494,8 @@
           ActionButton,
           OrDivider,
         },
-        props: ["otpDestination"],
-        emits: ["next", "sign-out"],
+        props: ["otpDestination", "supportedChannels"],
+        emits: ["next", "sign-out", "resend-otp"],
         setup(props, { emit }) {
           const otpCode = ref("");
           const rememberMe = ref(false);
@@ -506,7 +506,12 @@
             emit("next", otpCode.value);
           };
 
-          return { otpCode, rememberMe, isValid, handleNext };
+          const handleResend = (channelId) => {
+            console.log("Resend OTP via:", channelId);
+            emit("resend-otp", channelId);
+          };
+
+          return { otpCode, rememberMe, isValid, handleNext, handleResend };
         },
         template: `
             <div class="w-full flex justify-center bg-[#eff5ff] pt-[52px]">
@@ -534,12 +539,18 @@
                                 <div class="flex flex-col w-full mb-[8px]">
                                     <otp-input v-model="otpCode"></otp-input>
                                 </div>
-                                <div class="flex items-center justify-center gap-[10px] mt-[25px] mb-[36px]">
+                                <div class="flex items-center justify-center gap-[10px] mt-[25px] mb-[36px]" v-if="supportedChannels && supportedChannels.length > 0">
                                     <span class="text-[14px] text-[#6a7282] font-normal font-sans">重新發送驗證碼：</span>
                                     <div class="flex items-center">
-                                        <span class="text-[14px] text-[#005bd3] cursor-pointer font-sans pr-[12px]">手機簡訊</span>
-                                        <div class="w-[1px] h-[24px] bg-[#e6e6e6]"></div>
-                                        <span class="text-[14px] text-[#005bd3] cursor-pointer font-sans pl-[12px]">電子信箱</span>
+                                        <template v-for="(channel, index) in supportedChannels" :key="channel.validationChannelId">
+                                            <div v-if="index > 0" class="w-[1px] h-[24px] bg-[#e6e6e6] mx-[12px]"></div>
+                                            <span 
+                                                class="text-[14px] text-[#005bd3] cursor-pointer font-sans"
+                                                @click="handleResend(channel.validationChannelId)"
+                                            >
+                                                {{ channel.validationChannelId === 'SMS' ? '手機簡訊' : '電子信箱' }}
+                                            </span>
+                                        </template>
                                     </div>
                                 </div>
                                 <div class="w-full">
@@ -1043,6 +1054,7 @@
 
           const cards = ref([]);
           const otpDestination = ref("");
+          const supportedChannels = ref([]);
           const identityType = ref("");
           const identityValue = ref("");
 
@@ -1188,11 +1200,30 @@
                 console.log("Initiate Validation Response: %o", initRes);
                 otpDestination.value =
                   initRes?.maskedValidationChannel || payload.value;
+                supportedChannels.value = initRes?.supportedValidationChannels || [];
                 currentStep.value = "OtpStep";
               } else {
                 currentStep.value = "RegisterStep";
               }
             }, "驗證失敗");
+          };
+
+          const handleResendOtp = async (channelId) => {
+            await safeAction(async () => {
+              showLoading("正在重新發送驗證碼...");
+              const initRequest = {
+                requestedValidationChannelId: channelId,
+              };
+              console.log("Resend Initiate Validation Request: %o", initRequest);
+              const initRes = await mcCheckoutService.initiateValidation(
+                initRequest
+              );
+              console.log("Resend Initiate Validation Response: %o", initRes);
+              otpDestination.value =
+                initRes?.maskedValidationChannel || otpDestination.value;
+              supportedChannels.value = initRes?.supportedValidationChannels || supportedChannels.value;
+              showToast(`驗證碼已重新發送至 ${otpDestination.value}`);
+            }, "重新發送失敗");
           };
 
           const handleOtpNext = async (otpCode) => {
@@ -1318,6 +1349,7 @@
             currentStep,
             cards,
             otpDestination,
+            supportedChannels,
             identityValue,
             isLoading,
             loadingText,
@@ -1327,6 +1359,7 @@
             handlePrev,
             handlePayment,
             handleSignOut,
+            handleResendOtp,
             debugSteps,
             setStep,
           };
@@ -1354,8 +1387,10 @@
                         :is="currentStep" 
                         :cards="cards"
                         :otp-destination="otpDestination"
+                        :supported-channels="supportedChannels"
                         :identity-value="identityValue"
                         @next="handleStepNext"
+                        @resend-otp="handleResendOtp"
                         @pay="handlePayment"
                         @prev="handlePrev"
                         @sign-out="handleSignOut"
