@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
@@ -96,22 +96,29 @@
             return local[0] + "·····" + local[local.length - 1] + "@" + domain;
           } else {
             if (val.length <= 5) return val;
-            return val.substring(0, 3) + "·····" + val.substring(val.length - 2);
+            return (
+              val.substring(0, 3) + "·····" + val.substring(val.length - 2)
+            );
           }
         },
         validateEmail(val) {
           return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
         },
         formatCardNumber(val) {
-          return val.replace(/\D/g, "").substring(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
+          return val
+            .replace(/\D/g, "")
+            .substring(0, 16)
+            .replace(/(\d{4})(?=\d)/g, "$1 ");
         },
         formatExpiry(val) {
           let res = val.replace(/\D/g, "").substring(0, 4);
-          return res.length >= 2 ? res.substring(0, 2) + "/" + res.substring(2) : res;
+          return res.length >= 2
+            ? res.substring(0, 2) + "/" + res.substring(2)
+            : res;
         },
         formatCVC(val) {
           return val.replace(/\D/g, "").substring(0, 3);
-        }
+        },
       };
 
       // --- Common Components ---
@@ -397,7 +404,7 @@
           const values = ref(
             props.modelValue && props.modelValue.length === 6
               ? props.modelValue.split("")
-              : Array(6).fill("")
+              : Array(6).fill(""),
           );
 
           const handleInput = (index, event) => {
@@ -719,7 +726,9 @@
         emits: ["pay", "cancel", "sign-out"],
         setup(props, { emit }) {
           const selectedOption = ref("manual");
-          const maskedIdentityValue = computed(() => Utils.maskIdentity(props.identityValue));
+          const maskedIdentityValue = computed(() =>
+            Utils.maskIdentity(props.identityValue),
+          );
 
           const manualCard = ref({
             cardNumber: "",
@@ -742,7 +751,7 @@
             let selectedSrcDigitalCardId = null;
             if (selectedOption.value !== "manual") {
               const card = props.cards.find(
-                (c) => c.srcDigitalCardId === selectedOption.value
+                (c) => c.srcDigitalCardId === selectedOption.value,
               );
               if (card) {
                 selectedSrcDigitalCardId = card.srcDigitalCardId;
@@ -856,7 +865,9 @@
           const cvc = ref("");
           const rememberMe = ref(true);
 
-          const maskedIdentityValue = computed(() => Utils.maskIdentity(props.identityValue));
+          const maskedIdentityValue = computed(() =>
+            Utils.maskIdentity(props.identityValue),
+          );
 
           const isValid = computed(() => {
             const rawCard = cardNumber.value.replace(/\D/g, "");
@@ -1090,9 +1101,10 @@
           };
 
           // --- Mastercard SDK Wrappers ---
-          const handleMcCheckoutServiceInit = () => {
-            mcCheckoutService
-              .init({
+          const handleMcCheckoutServiceInit = async () => {
+            showLoading("正在驗證身份...");
+            await safeAction(async () => {
+              const initRequest = {
                 srcDpaId: CONFIG.DPA_ID,
                 dpaData: {
                   dpaName: CONFIG.DPA_NAME,
@@ -1101,13 +1113,21 @@
                 dpaTransactionOptions: {
                   dpaLocale: CONFIG.DPA_LOCALE,
                 },
-              })
-              .then(() => {
-                console.log("Mastercard SDK Initialized Successfully");
-              })
-              .catch((err) => {
-                console.error("Mastercard SDK Initialization Failed:", err);
-              });
+              };
+
+              console.log("MC Checkout Service Init Request: %o", initRequest);
+              const initRes = await mcCheckoutService.init(initRequest);
+              console.log("MC Checkout Service Init Response: %o", initRes);
+
+              const cardsRes = await mcCheckoutService.getCards();
+              console.log("Cards Response: %o", cardsRes);
+
+              if (cardsRes && cardsRes.length > 0) {
+                cards.value = cardsRes;
+                currentStep.value = "SelectCardStep";
+              }
+
+            }, "初始化失敗").finally(() => hideLoading());
           };
 
           const encryptCard = async (payload) => {
@@ -1129,10 +1149,10 @@
             };
             console.log(
               "checkoutWithCard Request: %o",
-              checkoutWithCardRequest
+              checkoutWithCardRequest,
             );
             return await mcCheckoutService.checkoutWithCard(
-              checkoutWithCardRequest
+              checkoutWithCardRequest,
             );
           };
 
@@ -1145,10 +1165,10 @@
             };
             console.log(
               "checkoutWithNewCard Request: %o",
-              checkoutWithNewCardRequest
+              checkoutWithNewCardRequest,
             );
             return await mcCheckoutService.checkoutWithNewCard(
-              checkoutWithNewCardRequest
+              checkoutWithNewCardRequest,
             );
           };
 
@@ -1160,7 +1180,7 @@
             return window.open(
               "",
               "mastercard_popup",
-              `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=yes`
+              `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=yes`,
             );
           };
 
@@ -1194,18 +1214,59 @@
                     payload.type === "email" ? "EMAIL" : "SMS",
                 };
                 console.log("Initiate Validation Request: %o", initRequest);
-                const initRes = await mcCheckoutService.initiateValidation(
-                  initRequest
-                );
+                const initRes =
+                  await mcCheckoutService.initiateValidation(initRequest);
                 console.log("Initiate Validation Response: %o", initRes);
                 otpDestination.value =
                   initRes?.maskedValidationChannel || payload.value;
-                supportedChannels.value = initRes?.supportedValidationChannels || [];
+                supportedChannels.value =
+                  initRes?.supportedValidationChannels || [];
                 currentStep.value = "OtpStep";
               } else {
                 currentStep.value = "RegisterStep";
               }
             }, "驗證失敗");
+          };
+
+          const handleLoginNextTwo = async (payload) => {
+            identityType.value = payload.type;
+            identityValue.value = payload.value;
+
+            const popup = openPopup();
+
+            if (!popup) {
+              showToast("無法開啟支付視窗，請檢查瀏覽器設定", "error");
+              return;
+            }
+
+            await safeAction(async () => {
+              showLoading("正在驗證身份...");
+
+              const authenticationRequest = {
+                windowRef: popup,
+                requestRecognitionToken: true,
+                accountReference: {
+                  consumerIdentity: {
+                    identityType:
+                      identityType.value === "email"
+                        ? "EMAIL_ADDRESS"
+                        : "MOBILE_PHONE_NUMBER",
+                    identityValue: identityValue.value,
+                  },
+                },
+              };
+
+              console.log("Authentication Request: %o", authenticationRequest);
+
+              const authenticateRes = await mcCheckoutService.authenticate(
+                authenticationRequest,
+              );
+
+              console.log("Authentication Response: %o", authenticateRes);
+
+              cards.value = authenticateRes.cards || [];
+              currentStep.value = "SelectCardStep";
+            }, "驗證失敗").finally(() => popup.close());
           };
 
           const handleResendOtp = async (channelId) => {
@@ -1214,14 +1275,17 @@
               const initRequest = {
                 requestedValidationChannelId: channelId,
               };
-              console.log("Resend Initiate Validation Request: %o", initRequest);
-              const initRes = await mcCheckoutService.initiateValidation(
-                initRequest
+              console.log(
+                "Resend Initiate Validation Request: %o",
+                initRequest,
               );
+              const initRes =
+                await mcCheckoutService.initiateValidation(initRequest);
               console.log("Resend Initiate Validation Response: %o", initRes);
               otpDestination.value =
                 initRes?.maskedValidationChannel || otpDestination.value;
-              supportedChannels.value = initRes?.supportedValidationChannels || supportedChannels.value;
+              supportedChannels.value =
+                initRes?.supportedValidationChannels || supportedChannels.value;
               showToast(`驗證碼已重新發送至 ${otpDestination.value}`);
             }, "重新發送失敗");
           };
@@ -1258,12 +1322,12 @@
                 checkoutRes = await checkoutNewCard(
                   encryptRes,
                   payload.rememberMe || false,
-                  popup
+                  popup,
                 );
               } else {
                 checkoutRes = await checkoutCard(
                   payload.srcDigitalCardId,
-                  popup
+                  popup,
                 );
               }
               console.log("Checkout Response: %o", checkoutRes);
@@ -1294,7 +1358,7 @@
 
           const handleStepNext = (payload) => {
             if (currentStep.value === "LoginStep") {
-              handleLoginNext(payload);
+              handleLoginNextTwo(payload);
             } else if (currentStep.value === "RegisterStep") {
               handleRegisterNext(payload);
             } else if (currentStep.value === "OtpStep") {
@@ -1337,9 +1401,10 @@
           };
 
           // Mastercard SDK Initialization
-          onMounted(() => {
+          onMounted(async () => {
             if (mcCheckoutService) {
-              handleMcCheckoutServiceInit();
+              await handleMcCheckoutServiceInit();
+
             } else {
               console.warn("Mastercard SDK script not loaded or blocked.");
             }
