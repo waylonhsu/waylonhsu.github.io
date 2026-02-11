@@ -74,6 +74,124 @@
     <div id="app" class="w-full flex justify-center"></div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+    <!-- Related to Navigation  -->
+    <template id="navigation-bar">
+      <div
+        class="bg-[#fafafa] flex items-center justify-between w-full px-2 py-1 shrink-0"
+      >
+        <!-- Cancel Button -->
+        <div
+          class="flex items-center p-2 cursor-pointer"
+          @click="$emit('close')"
+        >
+          <span class="text-[#6a7282] text-base leading-6 font-normal font-sans"
+            >取消</span
+          >
+        </div>
+
+        <!-- Language Label -->
+        <div
+          class="bg-white border border-[#e5e7eb] rounded-[6px] px-5 py-[7px] flex items-center gap-[9px] shrink-0"
+        >
+          <span class="text-xs font-bold leading-[18px] text-[#000000de]"
+            >中文</span
+          >
+        </div>
+      </div>
+    </template>
+
+    <template id="header-title">
+      <div
+        class="bg-[#fafafa] flex flex-col items-start justify-center px-5 py-2 w-full shrink-0"
+      >
+        <h1 class="text-[20px] font-bold leading-[30px] text-[#000000de]">
+          {{ text }}
+        </h1>
+      </div>
+    </template>
+
+    <template id="action-button">
+      <button
+        class="flex items-center justify-center px-[16px] py-[10px] rounded-[6px] w-full shrink-0 transition"
+        :class="[
+                    primary 
+                        ? 'bg-[#005bd3] text-white hover:bg-[#004dc1]' 
+                        : 'bg-white border-2 border-[#005bd3] text-[#005bd3] hover:bg-blue-50',
+                    disabled ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+        :disabled="disabled"
+      >
+        <slot name="icon"></slot>
+        <span
+          class="text-[16px] leading-[24px] font-semibold font-sans whitespace-nowrap"
+          >{{ text }}</span
+        >
+      </button>
+    </template>
+
+    <template id="or-divider">
+      <div
+        class="relative flex items-center justify-center h-[40px] w-full shrink-0"
+      >
+        <div class="w-full border-t border-[#d1d5dc]"></div>
+        <div
+          class="absolute bg-white px-3 text-[#6a7282] text-[14px] leading-[20px] font-normal font-sans"
+        >
+          OR
+        </div>
+      </div>
+    </template>
+
+    <template id="loading-overlay">
+      <div
+        class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white bg-opacity-60"
+      >
+        <div
+          class="w-[200px] h-[200px] mb-6 border-4 border-gray-100 rounded-full animate-spin border-t-[#005bd3]"
+        ></div>
+        <div class="mb-1 font-semibold text-[#141413]">{{ text }}</div>
+        <div v-if="subtext" class="text-sm text-[#666]">{{ subtext }}</div>
+      </div>
+    </template>
+
+    <template id="toast">
+      <div
+        class="fixed top-10 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 items-center pointer-events-none"
+      >
+        <transition-group name="toast">
+          <div
+            v-for="toast in toasts"
+            :key="toast.id"
+            class="px-6 py-3 rounded-full shadow-lg text-white font-medium flex items-center gap-2 pointer-events-auto"
+            :class="toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'"
+          >
+            <div v-if="toast.type === 'error'" class="w-5 h-5">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+              </svg>
+            </div>
+            <div v-else class="w-5 h-5">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M5 13l4 4L19 7"
+                ></path>
+              </svg>
+            </div>
+            {{ toast.message }}
+          </div>
+        </transition-group>
+      </div>
+    </template>
+
     <script>
       const CONFIG = {
         DPA_ID: "4b03a667-6b18-467e-b046-e93c05e26176", // Replace with your actual DPA ID
@@ -125,28 +243,12 @@
 
       const NavigationBar = defineComponent({
         emits: ["close"],
-        template: `
-          <div class="bg-[#fafafa] flex items-center justify-between w-full px-2 py-1 shrink-0">
-             <!-- Cancel Button -->
-             <div class="flex items-center p-2 cursor-pointer" @click="$emit('close')">
-                <span class="text-[#6a7282] text-base leading-6 font-normal font-sans">取消</span>
-             </div>
-             
-             <!-- Language Label -->
-             <div class="bg-white border border-[#e5e7eb] rounded-[6px] px-5 py-[7px] flex items-center gap-[9px] shrink-0">
-                <span class="text-xs font-bold leading-[18px] text-[#000000de]">中文</span>
-             </div>
-          </div>
-        `,
+        template: "#navigation-bar",
       });
 
       const HeaderTitle = defineComponent({
         props: ["text"],
-        template: `
-          <div class="bg-[#fafafa] flex flex-col items-start justify-center px-5 py-2 w-full shrink-0">
-             <h1 class="text-[20px] font-bold leading-[30px] text-[#000000de]">{{ text }}</h1>
-          </div>
-        `,
+        template: "#header-title",
       });
 
       const ActionButton = defineComponent({
@@ -155,32 +257,11 @@
           text: String,
           disabled: Boolean,
         },
-        template: `
-            <button 
-                class="flex items-center justify-center px-[16px] py-[10px] rounded-[6px] w-full shrink-0 transition"
-                :class="[
-                    primary 
-                        ? 'bg-[#005bd3] text-white hover:bg-[#004dc1]' 
-                        : 'bg-white border-2 border-[#005bd3] text-[#005bd3] hover:bg-blue-50',
-                    disabled ? 'opacity-50 cursor-not-allowed' : ''
-                ]"
-                :disabled="disabled"
-            >
-                <slot name="icon"></slot>
-                <span class="text-[16px] leading-[24px] font-semibold font-sans whitespace-nowrap">{{ text }}</span>
-            </button>
-        `,
+        template: "#action-button",
       });
 
       const OrDivider = defineComponent({
-        template: `
-            <div class="relative flex items-center justify-center h-[40px] w-full shrink-0">
-                <div class="w-full border-t border-[#d1d5dc]"></div>
-                <div class="absolute bg-white px-3 text-[#6a7282] text-[14px] leading-[20px] font-normal font-sans">
-                    OR
-                </div>
-            </div>
-        `,
+        template: "#or-divider",
       });
 
       const LoadingOverlay = defineComponent({
@@ -188,34 +269,12 @@
           text: { type: String, default: "處理中" },
           subtext: { type: String, default: "" },
         },
-        template: `
-          <div class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white bg-opacity-60">
-            <div class="w-[200px] h-[200px] mb-6 border-4 border-gray-100 rounded-full animate-spin border-t-[#005bd3]"></div>
-            <div class="mb-1 font-semibold text-[#141413]">{{ text }}</div>
-            <div v-if="subtext" class="text-sm text-[#666]">{{ subtext }}</div>
-          </div>
-        `,
+        template: "#loading-overlay",
       });
 
       const Toast = defineComponent({
         props: ["toasts"],
-        template: `
-          <div class="fixed top-10 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 items-center pointer-events-none">
-            <transition-group name="toast">
-              <div v-for="toast in toasts" :key="toast.id" 
-                   class="px-6 py-3 rounded-full shadow-lg text-white font-medium flex items-center gap-2 pointer-events-auto"
-                   :class="toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'">
-                  <div v-if="toast.type === 'error'" class="w-5 h-5">
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  </div>
-                  <div v-else class="w-5 h-5">
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                  </div>
-                  {{ toast.message }}
-              </div>
-            </transition-group>
-          </div>
-        `,
+        template: "#toast",
       });
 
       // --- Login Step Components ---
@@ -437,7 +496,25 @@
             }
           };
 
-          return { values, handleInput, handleKeydown };
+          const handlePaste = (event) => {
+            event.preventDefault();
+            const pasteData = event.clipboardData.getData("text").trim();
+
+            if (!/^[0-9]{6}$/.test(pasteData)) {
+              return;
+            }
+
+            for (let i = 0; i < 6; i++) {
+              values.value[i] = pasteData[i];
+            }
+            emit("update:modelValue", values.value.join(""));
+
+            nextTick(() => {
+              const lastInput = document.getElementById("otp-5");
+              if (lastInput) lastInput.focus();
+            });
+          };
+          return { values, handleInput, handleKeydown, handlePaste };
         },
         template: `
             <div class="flex items-center justify-center gap-2">
@@ -452,6 +529,7 @@
                             maxlength="1"
                             @input="handleInput(i, $event)"
                             @keydown="handleKeydown(i, $event)"
+                            @paste="handlePaste($event)"
                         />
                     </div>
                 </template>
@@ -540,7 +618,7 @@
                                 </div>
                                 <div class="mb-[16px]">
                                     <p class="text-[14px] leading-[20px] text-[#141413] font-normal font-sans">
-                                        輸入 Mastercard 發送至 {{ otpDestination }} 的驗證碼以確認是您本人。
+                                        輸入發送至 {{ otpDestination }} 的驗證碼以確認是您本人。
                                     </p>
                                 </div>
                                 <div class="flex flex-col w-full mb-[8px]">
@@ -1066,8 +1144,9 @@
           const cards = ref([]);
           const otpDestination = ref("");
           const supportedChannels = ref([]);
-          const identityType = ref("");
-          const identityValue = ref("");
+          // 預先把資料透過 Server render 的途徑將資料塞進 identityType & identityValue, 在 init 階段就會跳過 LoginStep 走入 OTPStep
+          const identityType = ref(""); // email or phone
+          const identityValue = ref(""); // email address or phone number without 0
 
           const toasts = ref([]);
 
@@ -1101,8 +1180,8 @@
           };
 
           // --- Mastercard SDK Wrappers ---
-          const handleMcCheckoutServiceInit = async () => {
-            showLoading("正在驗證身份...");
+          async function handleMcCheckoutServiceInit() {
+            showLoading("Click to Pay 正在查找你的卡片...");
             await safeAction(async () => {
               const initRequest = {
                 srcDpaId: CONFIG.DPA_ID,
@@ -1125,12 +1204,18 @@
               if (cardsRes && cardsRes.length > 0) {
                 cards.value = cardsRes;
                 currentStep.value = "SelectCardStep";
+              } else if (identityType.value && identityValue.value) {
+                await handleLoginNext({
+                  type: identityType.value,
+                  value: identityValue.value,
+                });
+              } else {
+                currentStep.value = "LoginStep";
               }
-
             }, "初始化失敗").finally(() => hideLoading());
-          };
+          }
 
-          const encryptCard = async (payload) => {
+          async function encryptCard(payload) {
             const [month, year] = payload.expiry.split("/");
             const encryptedCardRequest = {
               primaryAccountNumber: payload.cardNumber.replace(/\s/g, ""),
@@ -1140,9 +1225,9 @@
             };
             console.log("encryptedCard Request: %o", encryptedCardRequest);
             return await mcCheckoutService.encryptCard(encryptedCardRequest);
-          };
+          }
 
-          const checkoutCard = async (cardId, popup) => {
+          async function checkoutCard(cardId, popup) {
             const checkoutWithCardRequest = {
               srcDigitalCardId: cardId,
               windowRef: popup,
@@ -1154,9 +1239,9 @@
             return await mcCheckoutService.checkoutWithCard(
               checkoutWithCardRequest,
             );
-          };
+          }
 
-          const checkoutNewCard = async (encryptRes, rememberMe, popup) => {
+          async function checkoutNewCard(encryptRes, rememberMe, popup) {
             const checkoutWithNewCardRequest = {
               encryptedCard: encryptRes.encryptedCard,
               cardBrand: encryptRes.cardBrand,
@@ -1170,9 +1255,9 @@
             return await mcCheckoutService.checkoutWithNewCard(
               checkoutWithNewCardRequest,
             );
-          };
+          }
 
-          const openPopup = () => {
+          function openPopup() {
             const width = 480;
             const height = 700;
             const left = (window.screen.width - width) / 2;
@@ -1182,14 +1267,14 @@
               "mastercard_popup",
               `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=yes`,
             );
-          };
+          }
 
-          const handleLoginNext = async (payload) => {
+          async function handleLoginNext(payload) {
             identityType.value = payload.type;
             identityValue.value = payload.value;
 
             await safeAction(async () => {
-              showLoading("正在驗證身份...");
+              showLoading("Click to Pay 正在驗證身份...");
 
               let lookupRequest = {
                 [payload.type]:
@@ -1226,9 +1311,9 @@
                 currentStep.value = "RegisterStep";
               }
             }, "驗證失敗");
-          };
+          }
 
-          const handleLoginNextTwo = async (payload) => {
+          async function handleLoginNextTwo(payload) {
             identityType.value = payload.type;
             identityValue.value = payload.value;
 
@@ -1267,9 +1352,9 @@
               cards.value = authenticateRes.cards || [];
               currentStep.value = "SelectCardStep";
             }, "驗證失敗").finally(() => popup.close());
-          };
+          }
 
-          const handleResendOtp = async (channelId) => {
+          async function handleResendOtp(channelId) {
             await safeAction(async () => {
               showLoading("正在重新發送驗證碼...");
               const initRequest = {
@@ -1288,9 +1373,9 @@
                 initRes?.supportedValidationChannels || supportedChannels.value;
               showToast(`驗證碼已重新發送至 ${otpDestination.value}`);
             }, "重新發送失敗");
-          };
+          }
 
-          const handleOtpNext = async (otpCode) => {
+          async function handleOtpNext(otpCode) {
             await safeAction(async () => {
               showLoading("正在驗證...", "請稍候");
               const validateRes = await mcCheckoutService.validate({
@@ -1301,9 +1386,9 @@
               cards.value = cardsRes || [];
               currentStep.value = "SelectCardStep";
             }, "驗證失敗");
-          };
+          }
 
-          const handlePayment = async (payload) => {
+          async function handlePayment(payload) {
             const popup = openPopup();
             if (!popup) {
               showToast("無法開啟支付視窗，請檢查瀏覽器設定", "error");
@@ -1335,14 +1420,14 @@
               showToast("支付成功!");
               currentStep.value = "SuccessStep";
             }, "支付失敗").finally(() => popup.close());
-          };
+          }
 
-          const handleRegisterNext = async (payload) => {
+          async function handleRegisterNext(payload) {
             // RegisterStep just collects manual data and initiates a checkout.
             await handlePayment({ ...payload, isManual: true });
-          };
+          }
 
-          const handleSignOut = async () => {
+          async function handleSignOut() {
             await safeAction(async () => {
               showLoading("正在登出...");
               await mcCheckoutService.signOut();
@@ -1354,9 +1439,9 @@
               otpDestination.value = "";
               currentStep.value = "LoginStep";
             }, "登出失敗");
-          };
+          }
 
-          const handleStepNext = (payload) => {
+          function handleStepNext(payload) {
             if (currentStep.value === "LoginStep") {
               handleLoginNext(payload);
             } else if (currentStep.value === "RegisterStep") {
@@ -1364,15 +1449,15 @@
             } else if (currentStep.value === "OtpStep") {
               handleOtpNext(payload);
             }
-          };
+          }
 
-          const handlePrev = () => {
+          function handlePrev() {
             if (currentStep.value === "RegisterStep") {
               currentStep.value = "LoginStep";
             } else if (currentStep.value === "OtpStep") {
               currentStep.value = "LoginStep";
             }
-          };
+          }
 
           const debugSteps = [
             "LoginStep",
@@ -1404,7 +1489,6 @@
           onMounted(async () => {
             if (mcCheckoutService) {
               await handleMcCheckoutServiceInit();
-
             } else {
               console.warn("Mastercard SDK script not loaded or blocked.");
             }
